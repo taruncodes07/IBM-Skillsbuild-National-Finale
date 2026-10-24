@@ -1,0 +1,18 @@
+{
+  "disclosure": "Real HTTP/API smoke only; no browser interactions or rendered captures.",
+  "frontend_http_status": 200,
+  "api_http_status": 200,
+  "run_id": "run-0c6a7e10b933",
+  "seed": 42,
+  "sequence": 3,
+  "measurement_streams": 38,
+  "alert_boundary": "branch-03",
+  "alert_persistence": 3,
+  "sse_first_event": [
+    "id: 4",
+    "event: snapshot",
+    "data: {\"run_id\": \"run-0c6a7e10b933\", \"event_seq\": 4}",
+    ""
+  ],
+  "checked_at": "2026-10-24T06:24:12Z"
+}

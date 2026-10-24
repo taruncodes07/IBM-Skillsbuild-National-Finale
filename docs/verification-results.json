@@ -1,0 +1,242 @@
+{
+  "disclosure": "Synthetic diagnostic suite only. CV fixtures are rasterized pixel controls, NOT actual GPU scene captures. No held-out rendered IoU precision/recall is claimed.",
+  "reference": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "processor": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+    "python": "3.14.3",
+    "browser": "Unavailable; browser QA and FPS unverified"
+  },
+  "calibration_runs": [
+    {
+      "seed": 11,
+      "max_sigma_kwh": 0.015,
+      "baseline_intervals": 672
+    },
+    {
+      "seed": 23,
+      "max_sigma_kwh": 0.015,
+      "baseline_intervals": 672
+    },
+    {
+      "seed": 37,
+      "max_sigma_kwh": 0.015,
+      "baseline_intervals": 672
+    },
+    {
+      "seed": 49,
+      "max_sigma_kwh": 0.015,
+      "baseline_intervals": 672
+    }
+  ],
+  "held_out_runs": [
+    {
+      "seed": 101,
+      "scenario": "clean",
+      "first_alert_sequence_by_boundary": {},
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": -0.019994104625713438,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 102,
+      "scenario": "clean",
+      "first_alert_sequence_by_boundary": {},
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": -0.009695786259811654,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 103,
+      "scenario": "legitimate_load_change",
+      "first_alert_sequence_by_boundary": {},
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": 0.00852838024935972,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 104,
+      "scenario": "missing_telemetry",
+      "first_alert_sequence_by_boundary": {},
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": 0,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 105,
+      "scenario": "visible_unmetered_load",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 3
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 96.26944859373016,
+      "injected_unmetered_kwh": 94.80000000000014,
+      "relative_energy_error": 0.015500512592088811
+    },
+    {
+      "seed": 106,
+      "scenario": "visible_unmetered_load",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 3
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 96.35461218107852,
+      "injected_unmetered_kwh": 94.80000000000014,
+      "relative_energy_error": 0.01639886266960317
+    },
+    {
+      "seed": 107,
+      "scenario": "hidden_bypass",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 3
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 96.3367818477962,
+      "injected_unmetered_kwh": 94.80000000000014,
+      "relative_energy_error": 0.016210778985190525
+    },
+    {
+      "seed": 108,
+      "scenario": "occlusion",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 3
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 96.34376049217217,
+      "injected_unmetered_kwh": 94.80000000000014,
+      "relative_energy_error": 0.016284393377342027
+    },
+    {
+      "seed": 109,
+      "scenario": "meter_underregistration",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 8
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 27.452730325672647,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 110,
+      "scenario": "meter_underregistration",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 8
+      },
+      "eligible_positive": true,
+      "estimated_unexplained_kwh": 27.87659823326019,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 111,
+      "scenario": "topology_mismatch",
+      "first_alert_sequence_by_boundary": {},
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": 0.009565289067054334,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    },
+    {
+      "seed": 112,
+      "scenario": "technical_loss_change",
+      "first_alert_sequence_by_boundary": {
+        "branch-03": 3
+      },
+      "eligible_positive": false,
+      "estimated_unexplained_kwh": 78.99268343725119,
+      "injected_unmetered_kwh": 0,
+      "relative_energy_error": null
+    }
+  ],
+  "eligible_event_recall": {
+    "matched": 6,
+    "eligible": 6,
+    "ratio": 1.0
+  },
+  "localization": {
+    "correct": 6,
+    "matched": 6
+  },
+  "control_false_alerts": {
+    "count": 0,
+    "valid_clean_branch_hours": 2088.0,
+    "rate_per_100_hours": 0.0
+  },
+  "detection_delay_sim_minutes": {
+    "median": 45.0,
+    "p95": 120
+  },
+  "energy_error": {
+    "mean": 0.016098636906056132,
+    "max": 0.01639886266960317
+  },
+  "interval_latency_ms": {
+    "samples": 1140,
+    "p95": 2.1371999973780476,
+    "max": 11.474799997813534
+  },
+  "pixel_control_results": [
+    {
+      "view": 0,
+      "fixture": "positive",
+      "status": "candidate_found",
+      "candidate_regions": 1
+    },
+    {
+      "view": 0,
+      "fixture": "negative",
+      "status": "no_visible_candidate",
+      "candidate_regions": 0
+    },
+    {
+      "view": 0,
+      "fixture": "decorative",
+      "status": "no_visible_candidate",
+      "candidate_regions": 0
+    },
+    {
+      "view": 0,
+      "fixture": "blank",
+      "status": "inconclusive",
+      "candidate_regions": 0
+    },
+    {
+      "view": 1,
+      "fixture": "positive",
+      "status": "candidate_found",
+      "candidate_regions": 1
+    },
+    {
+      "view": 1,
+      "fixture": "negative",
+      "status": "no_visible_candidate",
+      "candidate_regions": 0
+    },
+    {
+      "view": 1,
+      "fixture": "decorative",
+      "status": "no_visible_candidate",
+      "candidate_regions": 0
+    },
+    {
+      "view": 1,
+      "fixture": "blank",
+      "status": "inconclusive",
+      "candidate_regions": 0
+    }
+  ],
+  "cv_latency_ms": {
+    "samples": 8,
+    "max": 33.26770000421675
+  },
+  "browser_verification": {
+    "live_scene_capture": "UNVERIFIED",
+    "layout": "UNVERIFIED",
+    "fps": "UNMEASURED",
+    "three_end_to_end_browser_rehearsals": "NOT RUN"
+  }
+}

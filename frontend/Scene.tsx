@@ -3,8 +3,9 @@ import {OrbitControls,Html,Line} from '@react-three/drei';
 import {useEffect,useMemo,useRef,useState,forwardRef,useImperativeHandle} from 'react';
 import * as THREE from 'three';
 import type {Asset,Snapshot,V3,Pose,Mission} from './types';
+import {sampleFlight,type FlightTelemetry} from './flight';
 export type SceneHandle={focus:()=>void;reset:()=>void;capture:(pose:Pose)=>Promise<string>;fly:(mission:Mission)=>Promise<void>};
-type Props={snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean};
+type Props={snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean;inspection?:boolean;onFlightProgress?:(value:FlightTelemetry)=>void;onReady?:()=>void;onUnavailable?:()=>void;paused?:boolean};
 const cyan='#58dce9',violet='#a294ff',amber='#ffbc44';
 
 function Box({p,s,color,...rest}:{p:V3;s:V3;color:string;[key:string]:any}){return <mesh position={p} {...rest}><boxGeometry args={s}/><meshStandardMaterial color={color} roughness={.85}/></mesh>}
@@ -48,23 +49,55 @@ function Scenery(){
  {[-55,55].map(x=>[-33,17].map(z=><group key={x+':'+z}><Pole p={[x,0,z]}/><mesh position={[x,7.9,z]}><sphereGeometry args={[.3,8,6]}/><meshStandardMaterial color="#fed39b" emissive="#ffbf67" emissiveIntensity={2}/></mesh></group>))}
  </group>
 }
-
-const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced},ref){
+function Drone({active,reduced}:{active:boolean;reduced:boolean}){
+ const rotors=useRef<(THREE.Group|null)[]>([]);
+ useFrame((_,delta)=>{if(active&&!reduced)rotors.current.forEach((r,i)=>{if(r)r.rotation.y+=delta*(i%2?40:-40)})});
+ return <group scale={1.7}>
+  <Box p={[0,0,0]} s={[1.25,.42,1.6]} color="#d4e5ef"/>
+  <Box p={[0,.25,0]} s={[.8,.16,1.1]} color="#1c3445"/>
+  {[-1,1].map(k=><Box key={k} p={[0,0,0]} s={[4.4,.18,.22]} rotation={[0,k*Math.PI/4,0]} color="#344f62"/>)}
+  {[-1,1].flatMap((x,i)=>[-1,1].map((z,j)=><group key={x+':'+z} position={[x*1.55,.2,z*1.55]}>
+   <mesh><cylinderGeometry args={[.22,.24,.3,12]}/><meshStandardMaterial color="#182b39"/></mesh>
+   <group ref={r=>{rotors.current[i*2+j]=r}}><Box p={[0,.2,0]} s={[1.8,.04,.13]} color="#a8d8e6"/><Box p={[0,.2,0]} s={[.13,.04,1.8]} color="#a8d8e6"/></group>
+   <mesh rotation={[-Math.PI/2,0,0]} position={[0,.16,0]}><ringGeometry args={[.85,.91,24]}/><meshBasicMaterial color={cyan} transparent opacity={active?.45:.18} side={THREE.DoubleSide}/></mesh>
+   <mesh position={[0,0,0]}><sphereGeometry args={[.12,8,8]}/><meshBasicMaterial color={x===1?'#54ffd0':'#ff876b'}/></mesh>
+  </group>))}
+  <mesh position={[0,-.48,.45]}><sphereGeometry args={[.3,12,12]}/><meshStandardMaterial color="#182e3c"/></mesh>
+  <mesh position={[0,-.48,.7]} rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[.16,.16,.12,12]}/><meshStandardMaterial color={cyan} emissive={cyan} emissiveIntensity={.7}/></mesh>
+  {[-.7,.7].map(x=><Box key={x} p={[x,-.55,0]} s={[.08,.5,1.6]} color="#7895a5"/>)}
+ </group>
+}
+const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced,inspection,onFlightProgress,onReady,onUnavailable},ref){
  const {gl,scene,camera}=useThree(); const controls=useRef<any>(null);const overlay=useRef<THREE.Group>(null);const drone=useRef<THREE.Group>(null);const [mission,setMission]=useState<Mission|null>(null);
- const flight=useRef<{start:number;resolve:()=>void;mission:Mission}|null>(null); const fps=useRef({t:0,n:0});
+ const flight=useRef<{start:number;resolve:()=>void;reject:(error:Error)=>void;mission:Mission;timer:ReturnType<typeof setTimeout>;lastUpdate:number}|null>(null); const fps=useRef({t:0,n:0});
+ const [flightActive,setFlightActive]=useState(false);const [routeComplete,setRouteComplete]=useState(false);
  const asset=snapshot.assets.find(a=>a.id===selected)!;const targetBranch=asset.kind==='household'?asset.parent_id!:selected;
  const status=snapshot.balances.find(b=>b.boundary_asset_id===targetBranch);const anomalous=snapshot.alerts.filter(a=>a.status==='active').map(a=>a.boundary_asset_id);
  const selectedColor=anomalous.includes(targetBranch)?amber:violet;
  useFrame((_,delta)=>{
    fps.current.n++;fps.current.t+=delta;if(fps.current.t>2){onFps?.(Math.round(fps.current.n/fps.current.t));fps.current={n:0,t:0}}
-   if(flight.current&&drone.current){const f=flight.current;const t=Math.min(1,(performance.now()-f.start)/15000);const way=f.mission.waypoints_m;const p=t*(way.length-1);const i=Math.min(way.length-2,Math.floor(p));if(!reduced)drone.current.position.lerpVectors(new THREE.Vector3(...way[i]),new THREE.Vector3(...way[i+1]),p-i);if(t>=1){flight.current=null;f.resolve()}}
+   if(flight.current&&drone.current){
+    const f=flight.current,now=performance.now(),sample=sampleFlight(f.mission.waypoints_m,now-f.start,reduced);
+    drone.current.position.set(...sample.position);
+    if(!reduced){camera.position.lerp(new THREE.Vector3(...sample.position).add(new THREE.Vector3(18,13,22)),Math.min(1,delta*3));controls.current?.target.lerp(new THREE.Vector3(...sample.position),Math.min(1,delta*4));controls.current?.update()}
+    if(now-f.lastUpdate>250||sample.progress===1){onFlightProgress?.(sample);f.lastUpdate=now}
+    if(sample.progress===1){clearTimeout(f.timer);flight.current=null;setFlightActive(false);setRouteComplete(true);f.resolve()}
+   }
  });
- useEffect(()=>()=>{flight.current?.resolve();flight.current=null},[]);
+ useEffect(()=>{const abort=()=>{const f=flight.current;if(f){clearTimeout(f.timer);flight.current=null;f.reject(new Error('The flight view was interrupted. Retry the inspection to capture evidence.'))}};const lost=()=>{setFlightActive(false);onUnavailable?.();abort()};const restored=()=>onReady?.();gl.domElement.addEventListener('webglcontextlost',lost);gl.domElement.addEventListener('webglcontextrestored',restored);return()=>{gl.domElement.removeEventListener('webglcontextlost',lost);gl.domElement.removeEventListener('webglcontextrestored',restored);abort()}},[gl]);
+ useEffect(()=>{if(inspection&&!flight.current){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(44,35,54)));controls.current?.target.copy(p.clone().add(new THREE.Vector3(0,5,10)));controls.current?.update()}},[inspection,asset.id,camera]);
  useImperativeHandle(ref,()=>({
   focus(){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(32,30,40)));controls.current.target.copy(p);controls.current.update()},
   reset(){camera.position.set(100,95,120);controls.current.target.set(0,0,0);controls.current.update()},
-  fly(m){setMission(m);return new Promise<void>(resolve=>{flight.current={start:performance.now(),resolve,mission:m}})},
+  fly(m){
+   if(flight.current)return Promise.reject(new Error('A drone flight is already active.'));
+   const initial=sampleFlight(m.waypoints_m,0);onFlightProgress?.(initial);setMission(m);setFlightActive(true);setRouteComplete(false);
+   const center=new THREE.Vector3();m.waypoints_m.forEach(p=>center.add(new THREE.Vector3(...p)));center.divideScalar(m.waypoints_m.length);
+   camera.position.copy(center.clone().add(new THREE.Vector3(reduced?45:20,reduced?35:16,reduced?52:26)));controls.current?.target.copy(center);controls.current?.update();
+   return new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{if(flight.current){flight.current=null;setFlightActive(false);reject(new Error('The flight view stopped updating. Keep the tab visible and retry the inspection.'))}},30000);flight.current={start:performance.now(),resolve,reject,mission:m,timer,lastUpdate:0}})
+  },
   async capture(pose){
+   if(gl.getContext().isContextLost())throw new Error('WebGL is unavailable. Reload the scene before retrying capture.');
    const view=new THREE.PerspectiveCamera(pose.fov,640/480,.1,500);view.position.set(...pose.position);view.lookAt(new THREE.Vector3(...pose.target));view.updateMatrixWorld();
    const renderTarget=new THREE.WebGLRenderTarget(640,480);renderTarget.texture.colorSpace=THREE.SRGBColorSpace;
    const prior=gl.getRenderTarget();const priorBackground=scene.background;const visible=overlay.current?.visible;
@@ -77,7 +110,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
     ctx.putImageData(out,0,0);return canvas.toDataURL('image/png').split(',')[1];
    }finally{gl.setRenderTarget(prior);scene.background=priorBackground;if(overlay.current)overlay.current.visible=visible??true;renderTarget.dispose()}
   }
- }),[asset,gl,scene,camera]);
+ }),[asset,gl,scene,camera,reduced,onFlightProgress]);
  return <>
   <color attach="background" args={['#0b1623']}/><fog attach="fog" args={['#0b1623',140,320]}/>
   <ambientLight intensity={1.3}/><directionalLight position={[10,55,40]} intensity={2.3} color="#c5d9ff"/><directionalLight position={[-20,25,-30]} intensity={1.2} color="#5c97cc"/>
@@ -94,11 +127,11 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
     return <Line key={c.id} points={c.geometry_points_m} color={problem?amber:active?violet:cyan} lineWidth={problem||active?2.6:1.1} transparent opacity={(problem || active) ? .9 : .4}/>
    })}
    <mesh position={[asset.position_m[0],.1,asset.position_m[2]]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[3,3.3,40]}/><meshBasicMaterial color={selectedColor} transparent opacity={.8}/></mesh>
-   <Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center distanceFactor={110} zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{status?.validity==='data_incomplete'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>
-   {snapshot.assets.filter(a=>a.kind==='feeder'&&a.id!==selected).map(a=><Html position={[a.position_m[0],12,a.position_m[2]]} key={a.id} center distanceFactor={140}><button className="scene-label feeder" onClick={()=>onSelect(a.id)}>{a.label}</button></Html>)}
-   {mission&&<><Line points={mission.waypoints_m} color={cyan} lineWidth={2} dashed dashSize={1} gapSize={.7}/><group ref={drone} position={mission.waypoints_m[0]}><Box p={[0,0,0]} s={[1.3,.3,1]} color={cyan}/>{[-1,1].map(x=>[-1,1].map(z=><mesh key={x+':'+z} position={[x,.2,z]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[.45,.6,14]}/><meshBasicMaterial color={cyan} side={THREE.DoubleSide}/></mesh>))}<mesh rotation={[Math.PI/2,0,0]} position={[0,-2,0]}><coneGeometry args={[2,4,4,1,true]}/><meshBasicMaterial color={cyan} wireframe transparent opacity={.35}/></mesh></group></>}
+   {!inspection&&<Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center distanceFactor={110} zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{status?.validity==='data_incomplete'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>}
+   {!inspection&&snapshot.assets.filter(a=>a.kind==='feeder'&&a.id!==selected).map(a=><Html position={[a.position_m[0],12,a.position_m[2]]} key={a.id} center distanceFactor={140} zIndexRange={[5,0]}><button className="scene-label feeder" onClick={()=>onSelect(a.id)}>{a.label}</button></Html>)}
+   {mission&&<><Line points={mission.waypoints_m} color={cyan} lineWidth={2} dashed dashSize={1} gapSize={.7}/>{mission.waypoints_m.map((p,i)=><group key={i} position={p}><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[1.6,1.8,32]}/><meshBasicMaterial color={cyan} transparent opacity={.65} side={THREE.DoubleSide}/></mesh></group>)}<group ref={drone} position={mission.waypoints_m[0]}><Drone active={flightActive} reduced={reduced}/><Html position={[0,4,0]} center zIndexRange={[6,0]}><div className="drone-caption"><span/>GT–01 <small>{flightActive?'IN FLIGHT':routeComplete?'ROUTE COMPLETE':'FLIGHT INTERRUPTED'}</small></div></Html><mesh rotation={[Math.PI,0,0]} position={[0,-4,0]}><coneGeometry args={[3,7,24,1,true]}/><meshBasicMaterial color={cyan} wireframe transparent opacity={.12}/></mesh></group></>}
   </group>
-  <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
+  <OrbitControls ref={controls} makeDefault enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
  </>
 });
-export default function Scene({handle,...props}:Props){return <Canvas camera={{position:[100,95,120],fov:43,near:.1,far:500}} dpr={[1,1.5]} gl={{antialias:true,powerPreference:'high-performance'}}><World ref={handle} {...props}/></Canvas>}
+export default function Scene({handle,onReady,paused,...props}:Props){return <Canvas frameloop={paused?'never':'always'} onCreated={()=>onReady?.()} camera={{position:[100,95,120],fov:43,near:.1,far:500}} dpr={[1,1.5]} gl={{antialias:true,powerPreference:'high-performance'}}><World ref={handle} {...props} onReady={onReady}/></Canvas>}

@@ -2,6 +2,11 @@
 
 Updated 25 October 2026. Based on source commit 8e8a59fe452bf42f1c9c96b7a853af64db9fcc73. The prototype is maintained on branch `grid-trace-prototype`. Earlier no-commit/no-push statements below are historical build records.
 
+## Latest: full adaptive evaluation and broader QA
+
+Full production-graph evaluation now ran on 18 held-out synthetic realizations: Granite 17 completed / 15 terminal-rubric successes, rules 18/18. One repeated check was safely policy-blocked; two commercial-data requests fell outside the declared terminal rubric. No model superiority or field-accuracy claim. See [B2_AND_QA_REPORT.md](B2_AND_QA_REPORT.md) and adaptive-results.json for the protocol, all traces and limitations.
+
+Verified: 63-test full backend suite plus two report-freshness tests, 10 client tests, production build, five API journeys and three consecutive browser review/export journeys. Phone/tablet/desktop layouts, offline draft recovery, keyboard focus and axe checks were exercised. Fixed scene labels over dialogs, calendar semantics, keyboard access to the capture panel and favicon. Manual contrast certification and real-device testing remain incomplete. This increment is local and uncommitted. Earlier status sections below are historical records.
 ## Implemented
 
 - September 2022 replay: 2,880 intervals, IST seeking, coverage summaries, revision controls and read-only source metadata. Development fixtures remain explicitly labeled DEV_FIXTURE.
@@ -77,3 +82,11 @@ Actual desktop rehearsal restored the existing field-check case at interval 4, D
 ## Branch checkpoint
 
 Prepared grid-trace-prototype with 56 backend tests, 10 client tests and the production build passing. Credentials, local databases, dependencies, build output and temporary diagnostics are excluded. Sample Markdown whitespace is normalized for Git. No changes are being merged into main.
+
+## Docker increment
+
+Added a multi-stage Docker image and Compose configuration: optional runtime .env, loopback port 8080, named SQLite/evidence volume, unprivileged user, one worker, HTTP health check and bounded shutdown. Built and ran successfully on Linux/amd64. All 65 backend tests passed inside the image; container recreation preserved a synthetic case, audit trail, frozen analysis and evidence. A real Granite request from inside Docker succeeded. See docs/DOCKER.md. Existing host data is separate from Docker's named volume. No commit or push for this increment.
+
+## UI and simulated-drone update
+
+Refreshed navigation, replay/scenario controls and inspection layout. Added a large drone view, following camera, route/progress/altitude display, image tabs and explicit launch controls. Fixed reduced-motion flight progression, interrupted-mission recovery, oversized labels and context changes during capture. Verified a normal flight and refresh/retry flight: two missions, two frame keys each, four processed images total. Thirteen client tests, 17 backend acceptance tests and production build passed. Five inspection widths and an axe scan passed with manual contrast review still outstanding. See docs/UI_AND_INSPECTION_UPDATE.md. Local only; no deployment, commit or push.

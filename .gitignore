@@ -9,5 +9,8 @@ data/*
 
 .test-tmp/
 .env
+.playwright-cli/
+output/playwright/
+docs/*.tmp
 .env.*
 !.env.example

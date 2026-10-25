@@ -1,3 +1,5 @@
+Latest validation (25 October): the 18-case full adaptive run and broader local QA are complete; see docs/B2_AND_QA_REPORT.md for counts, misses, fixes and remaining validation limits. This is internal synthetic validation, not an independently blinded study.
+
 # Grid Trace build plan
 
 Prepared: 25 October 2026. Status: implementation plan, not an implementation or completed acceptance report.

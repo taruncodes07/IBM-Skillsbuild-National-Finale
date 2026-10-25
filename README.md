@@ -8,6 +8,8 @@ Implemented with React 19, TypeScript, Vite, Three.js/React Three Fiber, FastAPI
 
 ## Run locally
 
+Docker option: from this directory run `docker compose up --build -d`, then open **http://127.0.0.1:8080/**. Docker Desktop must be running. Runtime credentials come from the optional `.env`; cases/evidence persist in a separate named volume. See [docs/DOCKER.md](docs/DOCKER.md) for setup, stopping and data details.
+
 Reference environment: Windows 11, Python 3.14.3, Node 24.14.0, npm 11.9.0. Python 3.12+ and Node 20.19+ are recommended; the exact lock was exercised on the reference versions.
 
 From this directory in PowerShell:

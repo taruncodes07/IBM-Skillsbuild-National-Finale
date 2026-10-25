@@ -1,0 +1,27 @@
+# Allow only build inputs. Credentials, local data and diagnostics never enter
+# the build context, including the intermediate frontend/dependency stages.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!index.html
+!requirements.lock.txt
+!frontend/
+!frontend/**
+!public/
+!public/**
+!backend/
+!backend/*.py
+!tests/
+!tests/benchmark_independent.py
+!tests/planner_pilot.py
+!tests/adaptive_evaluation.py
+!docs/
+!docs/*.md
+!docs/*.json
+!docs/rehearsal/
+!docs/rehearsal/*.md
+!docs/rehearsal/*.json

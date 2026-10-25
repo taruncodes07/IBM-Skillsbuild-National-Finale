@@ -1,0 +1,24 @@
+name: grid-trace
+
+services:
+  gridtrace:
+    image: grid-trace:local
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${GRIDTRACE_PORT:-8080}:8000"
+    # Optional credentials are supplied only when the container starts.
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      GRIDTRACE_DATA: /var/lib/gridtrace
+      LANGSMITH_TRACING: "false"
+    volumes:
+      - gridtrace_data:/var/lib/gridtrace
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+volumes:
+  gridtrace_data:

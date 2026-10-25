@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test:client": "node --test tests/frontend-recovery.test.mjs"
+    "test:client": "node --test tests/frontend-recovery.test.mjs tests/flight.test.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "9.1.2",

@@ -4,7 +4,7 @@ from datetime import datetime,timedelta,timezone
 from .topology import ASSETS, SECTIONS, CHILDREN, BY_ID, VERSION
 from .analytics import COEFFICIENTS
 
-START=datetime(2026,10,24,8,tzinfo=timezone.utc)
+START=datetime(2022,8,31,18,30,tzinfo=timezone.utc)  # 1 September 2022 00:00 IST
 SCENARIOS=['clean','visible_unmetered_load','missing_telemetry','legitimate_load_change','meter_underregistration','hidden_bypass','technical_loss_change','topology_mismatch','occlusion']
 
 def stamp(seq): return (START+timedelta(minutes=15*seq)).isoformat().replace('+00:00','Z')
@@ -18,7 +18,7 @@ def generate(seed,seq,incidents):
     demand={}; physical={}; extra_geometry=[]; occluders=[]; active=[]
     for a in ASSETS:
         if a['kind']=='household':
-            i=int(a['id'][-2:]); hour=(8+seq*.25+5.5)%24
+            i=int(a['id'][-2:]); hour=(seq*.25)%24
             peak=.7+1.0*math.exp(-((hour-8)/2)**2)+1.6*math.exp(-((hour-19)/3)**2)
             demand[a['id']]=(.45+(i*7%13)/12)*peak*.25*(.94+rng.random()*.12)
     for event in incidents:

@@ -10,6 +10,9 @@ from typing import Literal
 from . import store,engine,inspection
 from .simulation import SCENARIOS,stamp
 from .topology import BY_ID,VERSION
+from .sources import manifest, month_summary, MONTH_INTERVALS
+from . import investigations, providers, finance, benchmark
+from .contracts import InvestigationInput, FinanceInput
 
 logging.basicConfig(level=logging.INFO)
 ROLES=['analyst','reviewer','supervisor','presenter']
@@ -40,30 +43,40 @@ async def clock_loop():
 
 @asynccontextmanager
 async def lifespan(app):
+    for inv in store.all_of('investigation'):
+        if inv['status'] in ('queued','planning','running'):
+            inv.update(status='interrupted',error='Previous process stopped; start a new investigation to retry')
+            store.put('investigation',inv)
     for run in store.all_of('run'):
         run['playing']=False; store.put('run',run)
-    if not store.all_of('run'): engine.create_run()
+    if not store.all_of('run'): engine.create_run(mode='replay')
     task=asyncio.create_task(clock_loop())
     yield
     task.cancel()
+    for job in list(investigations.TASKS): job.cancel()
+    if investigations.TASKS: await asyncio.gather(*list(investigations.TASKS),return_exceptions=True)
 
-app=FastAPI(title='GridTrace local synthetic investigation API',lifespan=lifespan)
+app=FastAPI(title='Grid Trace local investigation API',lifespan=lifespan)
 
 class RunInput(BaseModel):
     seed:int=Field(default=42,ge=0,le=1000000)
     scenario:Literal[tuple(SCENARIOS)]='clean'
+    mode:Literal['laboratory','replay']='laboratory'
 class Control(BaseModel):
-    command:Literal['play','pause','step','speed']
+    command:Literal['play','pause','step','speed','seek']
     speed:Literal[1,10,60]=10
+    sequence:int|None=Field(default=None,ge=0,le=MONTH_INTERVALS-1)
+    expected_revision:int|None=Field(default=None,ge=1)
 class Incident(BaseModel):
     type:Literal[tuple(SCENARIOS)]
     target_asset_id:str='branch-03'
-    start:int=Field(ge=0,le=95)
-    end:int=Field(ge=1,le=96)
+    start:int=Field(ge=0,le=MONTH_INTERVALS-1)
+    end:int=Field(ge=1,le=MONTH_INTERVALS)
     severity:float=Field(default=1.2,gt=0,le=20,allow_inf_nan=False)
 class NewCase(BaseModel):
     alert_id:str
     idempotency_key:str=Field(min_length=1,max_length=100)
+    sequence:int|None=Field(default=None,ge=0,le=MONTH_INTERVALS-1)
 class CasePatch(BaseModel):
     expected_revision:int
     assigned_to:str|None=None
@@ -92,7 +105,7 @@ class FrameInput(BaseModel):
     capture_source:Literal['webgl_scene','pixel_control_fixture']
 class ReadingRevision(BaseModel):
     asset_id:str
-    sequence:int=Field(ge=0,le=95)
+    sequence:int=Field(ge=0,le=MONTH_INTERVALS-1)
     expected_revision:int=Field(ge=1)
     energy_import_kwh:float|None=Field(default=None,ge=0,allow_inf_nan=False)
     quality:Literal['valid','missing','stale','invalid','estimated']
@@ -100,11 +113,62 @@ class ReadingRevision(BaseModel):
 @app.get('/api/bootstrap')
 async def bootstrap():
     runs=store.all_of('run'); return dict(runs=[{k:v for k,v in r.items() if k in ('id','seed','seq','created_at')} for r in runs],cases=store.all_of('case'),scenarios=SCENARIOS,dispositions=DISPOSITIONS,roles=ROLES)
+
+@app.get('/api/sources')
+async def sources():
+    return dict(development=manifest(), bescom=dict(status='PENDING', source_kind='ACTUAL_EXTRACT',
+                reason='Historical BESCOM extract has not been onboarded'),
+                frozen_replay=dict(status='PENDING',reason='Original frozen September file has not been onboarded'))
+
+@app.get('/api/health')
+async def health():
+    return dict(application='Grid Trace', storage='OK' if store.DB.execute('SELECT 1').fetchone() else 'FAILED',
+                sources='DEVELOPMENT_ONLY', planner='GRANITE_GROK_RULES', providers=providers.configuration(), vision='DEFERRED')
+
+@app.post('/api/investigations')
+async def start_investigation(body:InvestigationInput,x_actor:str=Header(default='analyst')):
+    role(x_actor,['analyst','supervisor'])
+    run=require(body.run_id,'run')
+    if body.area_id not in BY_ID or BY_ID[body.area_id]['kind'] not in ('feeder','transformer','branch'):
+        raise HTTPException(400,'Choose a measured feeder, transformer or branch')
+    if body.sequence>run['seq']: raise HTTPException(400,'Select an available interval first')
+    try: inv=investigations.create(body,engine.snapshot(run['id'],body.sequence),actor=x_actor)
+    except ValueError as exc: raise HTTPException(409,str(exc))
+    return investigations.public(inv)
+
+@app.get('/api/investigations')
+async def list_investigations(run_id:str|None=None):
+    return [investigations.public(inv) for inv in store.all_of('investigation') if run_id is None or inv['run_id']==run_id]
+
+@app.get('/api/investigations/{iid}')
+async def get_investigation(iid:str):
+    return dict(**investigations.public(require(iid,'investigation')),trace=investigations.trace(iid))
+
+@app.post('/api/finance/scenario')
+async def finance_scenario(body:FinanceInput):
+    if body.scope_asset not in BY_ID: raise HTTPException(400,'Unknown scope asset')
+    try: result=finance.calculate(body)
+    except ValueError as exc: raise HTTPException(400,str(exc))
+    result.update(id=store.uid('finance'),created_at=store.now())
+    store.put('finance',result)
+    return result
+
+@app.get('/api/benchmark')
+async def benchmark_results():
+    return benchmark.results()
+
+@app.get('/api/runs/{rid}/month')
+async def month(rid:str):
+    run=require(rid,'run')
+    if run.get('mode')!='replay': raise HTTPException(400,'Month summary requires a replay run')
+    return month_summary(run['seed'])
 @app.post('/api/runs')
 async def create_run(body:RunInput):
+    if body.mode=='replay' and body.scenario!='clean':
+        raise HTTPException(400,'Replay is read-only; use the laboratory for injected scenarios')
     for r in store.all_of('run'):
         if r['playing']: r['playing']=False; store.put('run',r)
-    return engine.snapshot(engine.create_run(body.seed,body.scenario)['id'])
+    return engine.snapshot(engine.create_run(body.seed,body.scenario,body.mode)['id'])
 @app.get('/api/runs/{rid}/snapshot')
 async def snapshot(rid:str,seq:int|None=None):
     r=require(rid,'run')
@@ -113,21 +177,30 @@ async def snapshot(rid:str,seq:int|None=None):
 @app.post('/api/runs/{rid}/control')
 async def control(rid:str,body:Control):
     r=require(rid,'run')
-    if body.command in ('play','step') and any(m['run_id']==rid and m['status'] in ('approved','flying','capturing','processing') for m in store.all_of('mission')):
+    if body.expected_revision is not None and body.expected_revision!=r.get('revision',1):
+        raise HTTPException(409,'Replay changed; refresh and retry with its current revision')
+    if body.command in ('play','step','seek') and any(m['run_id']==rid and m['status'] in ('approved','flying','capturing','processing') for m in store.all_of('mission')):
         raise HTTPException(409,'Finish or cancel the active mission before advancing its frozen scene')
-    if body.command=='step':
+    if body.command=='seek':
+        if body.sequence is None: raise HTTPException(400,'Seek requires an interval sequence')
+        try: engine.seek(r,body.sequence)
+        except ValueError as exc: raise HTTPException(400,str(exc))
+    elif body.command=='step':
         if r['playing']: raise HTTPException(409,'Pause before single stepping')
         engine.step(r)
     else:
+        if body.command=='play' and r.get('selected_seq',r['seq'])>=r.get('interval_count',96)-1:
+            raise HTTPException(409,'End of replay; select an earlier interval first')
         if body.command=='speed': r['speed']=body.speed
         else: r['playing']=body.command=='play'
-        r['event_seq']+=1; store.put('run',r)
+        r['event_seq']+=1; r['revision']=r.get('revision',1)+1; store.put('run',r)
     return engine.snapshot(rid)
 @app.post('/api/runs/{rid}/incidents')
 async def incident(rid:str,body:Incident,x_actor:str=Header(default='analyst')):
     role(x_actor,['presenter']); r=require(rid,'run')
+    if r.get('mode')=='replay': raise HTTPException(409,'Replay is read-only; inject incidents in a laboratory run')
     if body.target_asset_id not in BY_ID or BY_ID[body.target_asset_id]['kind']!='branch': raise HTTPException(400,'Target must be a monitored branch')
-    if body.start<=r['seq'] or body.end<=body.start: raise HTTPException(400,'Incident must start after the current interval and end after its start')
+    if body.start<=r['seq'] or body.end<=body.start or body.end>r.get('interval_count',96): raise HTTPException(400,'Incident must lie in future intervals within this run')
     r['scenario_settings'].append(body.model_dump()); r['event_seq']+=1; store.put('run',r); return dict(accepted=True)
 @app.get('/api/runs/{rid}/truth')
 async def truth(rid:str,x_actor:str=Header(default='analyst')):
@@ -145,13 +218,15 @@ async def events(rid:str,request:Request,after_seq:int=-1):
             await asyncio.sleep(.25)
     return StreamingResponse(stream(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 @app.get('/api/assets/{aid}/history')
-async def history(aid:str,run_id:str,start:int=0,end:int=95):
+async def history(aid:str,run_id:str,start:int=0,end:int|None=None):
     r=require(run_id,'run')
     if aid not in BY_ID: raise HTTPException(404,'Unknown asset')
-    return [dict(seq=i,reading=s['readings'].get(aid),balance=next((b for b in s['balances'] if b['boundary_asset_id']==aid),None)) for i in range(max(0,start),min(end,r['seq'])+1) if (s:=store.interval(run_id,i))]
+    last=r.get('selected_seq',r['seq']) if end is None else min(end,r['seq'])
+    return [dict(seq=i,reading=s['readings'].get(aid),balance=next((b for b in s['balances'] if b['boundary_asset_id']==aid),None)) for i in range(max(0,start),last+1) if (s:=store.interval(run_id,i))]
 @app.post('/api/runs/{rid}/readings/revise')
 async def revise_reading(rid:str,body:ReadingRevision,x_actor:str=Header(default='analyst')):
     role(x_actor,['analyst','supervisor']);run=require(rid,'run')
+    if run.get('mode')=='replay': raise HTTPException(409,'Replay source is read-only; revisions are available in the laboratory')
     if run['playing']: raise HTTPException(409,'Pause before explicit recomputation')
     if any(m['run_id']==rid and m['status'] in ('approved','flying','capturing','processing') for m in store.all_of('mission')): raise HTTPException(409,'Finish or cancel the mission before recomputing its capture observations')
     row=store.interval(rid,body.sequence)
@@ -174,12 +249,16 @@ async def create_case(body:NewCase,x_actor:str=Header(default='analyst')):
         if c['alert_id']==body.alert_id: return c
     alert=None; r=None
     for run in store.all_of('run'):
-        for a in store.interval(run['id'],run['seq'])['alerts']:
+        selected_seq=run.get('selected_seq',run['seq']) if body.sequence is None else body.sequence
+        interval=store.interval(run['id'],selected_seq)
+        if interval is None: continue
+        for a in interval['alerts']:
             if a['id']==body.alert_id: alert=a; r=run; break
+        if alert: break
     if not alert or alert['status']!='active': raise HTTPException(400,'Choose an active, persistent alert')
-    c=dict(id=store.uid('case'),run_id=r['id'],alert_id=alert['id'],boundary_asset_id=alert['boundary_asset_id'],state='open',priority=alert['priority'],assigned_to=None,created_by=x_actor,created_at=store.now(),updated_at=store.now(),revision=1,disposition=None,decision_reason=None,evidence_ids=[],provenance='synthetic',idempotency_key=body.idempotency_key,analysis_sequence=r['seq'])
-    frozen=store.interval(r['id'],r['seq'])
-    store.put('case-analysis',dict(id=c['id']+'-analysis',analysis={k:v for k,v in frozen.items() if not k.startswith('physical_')},contributing_intervals=[{k:v for k,v in store.interval(r['id'],i).items() if not k.startswith('physical_')} for i in range(alert['first_interval'],r['seq']+1)]))
+    c=dict(id=store.uid('case'),run_id=r['id'],alert_id=alert['id'],boundary_asset_id=alert['boundary_asset_id'],state='open',priority=alert['priority'],assigned_to=None,created_by=x_actor,created_at=store.now(),updated_at=store.now(),revision=1,disposition=None,decision_reason=None,evidence_ids=[],provenance='synthetic',idempotency_key=body.idempotency_key,analysis_sequence=selected_seq,source=r.get('source'))
+    frozen=store.interval(r['id'],selected_seq)
+    store.put('case-analysis',dict(id=c['id']+'-analysis',analysis={k:v for k,v in frozen.items() if not k.startswith('physical_')},contributing_intervals=[{k:v for k,v in store.interval(r['id'],i).items() if not k.startswith('physical_')} for i in range(alert['first_interval'],selected_seq+1)]))
     store.put('case',c); store.audit(c,x_actor,'created',None,refs=alert['balance_ids']); return c
 @app.get('/api/cases/{cid}')
 async def case_detail(cid:str):
@@ -214,8 +293,8 @@ async def mission(cid:str,body:MissionInput,x_actor:str=Header(default='analyst'
     if any(m['case_id']==cid and m['status'] not in ('completed','failed','cancelled') for m in store.all_of('mission')): raise HTTPException(409,'A mission is already active')
     r=require(c['run_id'],'run'); r['playing']=False; r['event_seq']+=1; store.put('run',r)
     x,_,z=BY_ID[c['boundary_asset_id']]['position_m']
-    m=dict(id=store.uid('mission'),case_id=cid,run_id=c['run_id'],target_asset_ids=[c['boundary_asset_id'],'pole-'+c['boundary_asset_id']],status='approved',approved_by=x_actor,approved_at=store.now(),waypoints_m=[[x+20,12,z+26],[x-20,12,z+26],[x+10,14,z+30]],created_at=store.now(),capture_sequence=r['seq'],failure_reason=None,provenance='synthetic',idempotency_key=body.idempotency_key,frame_keys={})
-    frozen=store.interval(r['id'],r['seq'])
+    m=dict(id=store.uid('mission'),case_id=cid,run_id=c['run_id'],target_asset_ids=[c['boundary_asset_id'],'pole-'+c['boundary_asset_id']],status='approved',approved_by=x_actor,approved_at=store.now(),waypoints_m=[[x+20,12,z+26],[x-20,12,z+26],[x+10,14,z+30]],created_at=store.now(),capture_sequence=c['analysis_sequence'],failure_reason=None,provenance='synthetic',idempotency_key=body.idempotency_key,frame_keys={})
+    frozen=store.interval(r['id'],m['capture_sequence'])
     store.put('capture-analysis',dict(id=m['id']+'-snapshot',observations={k:v for k,v in frozen.items() if not k.startswith('physical_')}))
     store.put('mission',m); bump(c,x_actor,'mission_approved',refs=[m['id']],new_state='inspection_requested' if c['state']=='triaged' else None); return m
 @app.get('/api/missions/{mid}')
@@ -265,14 +344,29 @@ async def export(cid:str,format:Literal['json','md']='json'):
     contributing=frozen['contributing_intervals'] if frozen else [analysis]
     capture_observations=[dict(capture_sequence=m['capture_sequence'],observations=(store.get(m['id']+'-snapshot') or {}).get('observations',{k:v for k,v in store.interval(c['run_id'],m['capture_sequence']).items() if not k.startswith('physical_')})) for m in detail['missions']]
     report=dict(schema_version='1.0',disclosure='Synthetic demonstration. Unexplained loss is not proven theft. RGB cannot verify authorization or energization. PNG images are separate downloadable files.',**detail,run={k:v for k,v in run.items() if k in ('id','seed','topology_version','rule_version','created_at')},analysis=analysis,contributing_intervals=contributing,capture_observations=capture_observations,aggregation_boundaries=[c['boundary_asset_id']],aggregation_note='Single instrumented boundary; nested residuals are not added.',exported_at=store.now())
+    report['investigations']=[dict(**investigations.public(inv),trace=investigations.trace(inv['id'])) for inv in store.all_of('investigation') if inv['run_id']==c['run_id'] and inv['area_id']==c['boundary_asset_id'] and inv['sequence']==c['analysis_sequence']]
     report['analysis']={k:v for k,v in analysis.items() if not k.startswith('physical_')}
     if format=='json': content=json.dumps(report,indent=2,allow_nan=False); media='application/json'
     else:
         bal=next(b for b in analysis['balances'] if b['boundary_asset_id']==c['boundary_asset_id'])
-        content=f"# GridTrace case {cid}\n\n{report['disclosure']}\n\nBoundary: {c['boundary_asset_id']} · Run: {c['run_id']} · Seed: {run['seed']}\n\nState: {c['state']} · Owner: {c['assigned_to'] or 'Unassigned'}\n\nDisposition: {c['disposition']}\n\nReason: {c['decision_reason']}\n\n## Frozen interval balance\n\n```json\n{json.dumps(bal,indent=2)}\n```\n\n## Evidence (separate PNG files)\n"
+        content=f"# Grid Trace case {cid}\n\n{report['disclosure']}\n\nBoundary: {c['boundary_asset_id']} · Run: {c['run_id']} · Seed: {run['seed']}\n\nState: {c['state']} · Owner: {c['assigned_to'] or 'Unassigned'}\n\nDisposition: {c['disposition']}\n\nReason: {c['decision_reason']}\n\n## Frozen interval balance\n\n```json\n{json.dumps(bal,indent=2)}\n```\n\n## Evidence (separate PNG files)\n"
         for e in detail['evidence']: content+=f"\n- {e['id']}: {e['observation_status']} · {e['original_image_path']} · SHA-256 `{e['original_sha256']}` · annotated: {e['annotated_image_path']} · SHA-256 `{e['annotated_sha256']}` · {e['detector_version']} · pose {json.dumps(e['camera_pose'])}\n"
         content+='\n## Contributing observed intervals\n\n```json\n'+json.dumps(contributing,indent=2)+'\n```\n\n## Audit history\n'
         for a in detail['audit']: content+=f"\n- {a['wall_timestamp']} · {a['actor_id']} · {a['action']} · {a['from_state']} → {a['to_state']} · {a['reason']}\n"
+        content+='\n## Worker investigations and planner provenance\n'
+        for inv in report['investigations']:
+            planner=inv.get('planner') or {}
+            content+=f"\n### {inv['id']}\n\nStatus: {inv['status']} · Interval: {inv['sequence']} · Source: {inv['source'].get('source_kind','unknown')}\n\nProvider: {planner.get('provider','not completed')} · Model: {planner.get('model','unknown')}\n"
+            for worker in inv['workers']:
+                content+=f"\n- {worker['worker']}: {worker['status']} · {worker['model_or_rule_version']} · Evidence: {', '.join(worker['evidence_ids'])}\n"
+            if planner.get('proposal'):content+='\nNext check: '+planner['proposal']['next_action']+'\n\n'+planner['proposal']['justification']+'\n'
+            for check in inv.get('checks',[]):
+                content+=f"\n#### Follow-up: {check['action']}\n\nStatus: {check['status']} · Target: {check['target_area_id']} · Evidence: {check['evidence_id']} · Version: {check['model_or_rule_version']}\n\n```json\n{json.dumps(check['findings'],indent=2)}\n```\n"
+                content+='\n'+ '\n'.join('- '+limit for limit in check['limitations'])+'\n'
+            for decision in inv.get('planner_history',[]):
+                content+=f"\n- Planner round {decision['round']}: {decision['provider']} · {decision['model']} · {decision['proposal']['next_action']} · Policy: {(decision.get('policy') or {}).get('reason','pending')}\n"
+            for trace_event in inv['trace']:
+                content+=f"\n- {trace_event['wall_timestamp']} · {trace_event['producer']} · {trace_event['event_type']}\n"
         media='text/markdown'
     raw=content.encode(); digest=hashlib.sha256(raw).hexdigest(); filename=f'{cid}-{digest[:12]}.{format}'
     (store.ROOT/filename).write_bytes(raw)

@@ -11,5 +11,5 @@ if (-not (Test-Path -LiteralPath 'node_modules')) {
 if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed' }
 npm run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-Write-Host 'GridTrace: http://127.0.0.1:8000 (Ctrl+C stops the server)'
+Write-Host 'Grid Trace: http://127.0.0.1:8000 (Ctrl+C stops the server)'
 & '.\.venv\Scripts\python.exe' -m uvicorn backend.main:app --host 127.0.0.1 --port 8000

@@ -1,0 +1,359 @@
+{
+  "status": "COMPLETED",
+  "code_hash": "4288902bcd4a1b57564994db57f52486bf9bf4925ed82341a8280bb3664bbb50",
+  "generated_at": "2026-10-25T08:48:14.816889+00:00",
+  "disclosure": "36 independently constructed synthetic diagnostic cases; includes weak events and parameter mismatch. This is not a blinded external team study, a rendered CV test or field accuracy. Authorized unmetered loads count as unexplained accounting events, not wrongdoing.",
+  "policies": {
+    "B0": {
+      "status": "COMPLETED",
+      "metrics": {
+        "matched_events": 16,
+        "eligible_events": 20,
+        "eligible_event_recall": 0.8,
+        "false_alerts": 0,
+        "valid_control_branch_hours": 6.0,
+        "false_alerts_per_100_control_hours": 0.0
+      }
+    },
+    "B1": {
+      "status": "COMPLETED",
+      "metrics": {
+        "matched_events": 16,
+        "eligible_events": 20,
+        "eligible_event_recall": 0.8,
+        "false_alerts": 0,
+        "valid_control_branch_hours": 6.0,
+        "false_alerts_per_100_control_hours": 0.0
+      }
+    },
+    "B2": {
+      "status": "NOT_RUN: requires a separately configured and pinned live planner provider"
+    }
+  },
+  "cases": [
+    {
+      "id": "case-01",
+      "mechanism": "clean",
+      "target": "branch-08",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-02",
+      "mechanism": "demand_change",
+      "target": "branch-05",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-03",
+      "mechanism": "missing",
+      "target": "branch-02",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-04",
+      "mechanism": "mapping",
+      "target": "branch-04",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-05",
+      "mechanism": "extra_load",
+      "target": "branch-01",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-06",
+      "mechanism": "underregistration",
+      "target": "branch-01",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-07",
+      "mechanism": "technical_loss",
+      "target": "branch-03",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-08",
+      "mechanism": "authorized_unmetered",
+      "target": "branch-04",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-09",
+      "mechanism": "weak_load",
+      "target": "branch-08",
+      "eligible_event": true,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-10",
+      "mechanism": "clean",
+      "target": "branch-08",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-11",
+      "mechanism": "demand_change",
+      "target": "branch-02",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-12",
+      "mechanism": "missing",
+      "target": "branch-05",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-13",
+      "mechanism": "mapping",
+      "target": "branch-01",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-14",
+      "mechanism": "extra_load",
+      "target": "branch-03",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-15",
+      "mechanism": "underregistration",
+      "target": "branch-01",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-16",
+      "mechanism": "technical_loss",
+      "target": "branch-01",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-17",
+      "mechanism": "authorized_unmetered",
+      "target": "branch-03",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-18",
+      "mechanism": "weak_load",
+      "target": "branch-08",
+      "eligible_event": true,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-19",
+      "mechanism": "clean",
+      "target": "branch-02",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-20",
+      "mechanism": "demand_change",
+      "target": "branch-02",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-21",
+      "mechanism": "missing",
+      "target": "branch-07",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-22",
+      "mechanism": "mapping",
+      "target": "branch-01",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-23",
+      "mechanism": "extra_load",
+      "target": "branch-02",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-24",
+      "mechanism": "underregistration",
+      "target": "branch-06",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-25",
+      "mechanism": "technical_loss",
+      "target": "branch-08",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-26",
+      "mechanism": "authorized_unmetered",
+      "target": "branch-05",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-27",
+      "mechanism": "weak_load",
+      "target": "branch-07",
+      "eligible_event": true,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-28",
+      "mechanism": "clean",
+      "target": "branch-06",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-29",
+      "mechanism": "demand_change",
+      "target": "branch-04",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    },
+    {
+      "id": "case-30",
+      "mechanism": "missing",
+      "target": "branch-08",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-31",
+      "mechanism": "mapping",
+      "target": "branch-06",
+      "eligible_event": false,
+      "b0": false,
+      "b1": false,
+      "valid": false
+    },
+    {
+      "id": "case-32",
+      "mechanism": "extra_load",
+      "target": "branch-03",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-33",
+      "mechanism": "underregistration",
+      "target": "branch-02",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-34",
+      "mechanism": "technical_loss",
+      "target": "branch-07",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-35",
+      "mechanism": "authorized_unmetered",
+      "target": "branch-03",
+      "eligible_event": true,
+      "b0": true,
+      "b1": true,
+      "valid": true
+    },
+    {
+      "id": "case-36",
+      "mechanism": "weak_load",
+      "target": "branch-08",
+      "eligible_event": true,
+      "b0": false,
+      "b1": false,
+      "valid": true
+    }
+  ]
+}

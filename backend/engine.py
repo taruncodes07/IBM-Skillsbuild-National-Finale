@@ -3,8 +3,11 @@ from . import store
 from .simulation import generate,stamp
 from .analytics import reconcile,detect,RULE_VERSION
 from .topology import ASSETS,CONNECTIONS,VERSION,CHILDREN
+from .sources import DevelopmentMonthSource, MONTH_INTERVALS
 
-def create_run(seed=42,scenario='clean'):
+def create_run(seed=42,scenario='clean',mode='laboratory'):
+    if mode == 'replay' and scenario != 'clean':
+        raise ValueError('Replay does not permit incident injection')
     rid=store.uid('run'); baseline={a['id']:[[] for _ in range(96)] for a in ASSETS if a['kind']=='household'}; residuals={}
     # Seven clean days per independently seeded run, not copied from scenario truth.
     for seq in range(-672,0):
@@ -15,12 +18,26 @@ def create_run(seed=42,scenario='clean'):
     means={k:[statistics.mean(slot) for slot in slots] for k,slots in baseline.items()}
     inc=[] if scenario=='clean' else [dict(type=scenario,target_asset_id='branch-03',start=1,end=80,severity=.85 if scenario=='meter_underregistration' else 1.2)]
     run=dict(id=rid,seed=seed,seq=-1,event_seq=0,playing=False,speed=10,scenario_settings=inc,topology_version=VERSION,rule_version=RULE_VERSION,created_at=store.now(),baseline=means,sigmas=sigma,streaks={},meter_streaks={},provenance='synthetic')
+    run.update(mode=mode, interval_count=MONTH_INTERVALS if mode=='replay' else 96,
+               selected_seq=-1, revision=1,
+               source=DevelopmentMonthSource(seed).manifest if mode=='replay' else
+               dict(source_kind='SYNTHETIC_CHALLENGE', label='Development scenario laboratory', official_source_status='PENDING'))
     store.put('run',run); step(run); return store.get(rid)
 
-def step(run):
+def step(run,commit=True):
+    if run.get('selected_seq',run['seq']) < run['seq']:
+        run['selected_seq'] += 1
+        if run['selected_seq']>=run.get('interval_count',96)-1: run['playing']=False
+        run['event_seq'] += 1
+        run['revision'] = run.get('revision',0)+1
+        store.put('run',run,commit=commit)
+        return
     seq=run['seq']+1
-    if seq>=96: run['playing']=False; store.put('run',run); return
-    started=time.perf_counter(); generated=generate(run['seed'],seq,run['scenario_settings']); obs=generated['readings']
+    if seq>=run.get('interval_count',96): run['playing']=False; store.put('run',run,commit=commit); return
+    started=time.perf_counter()
+    generated=(DevelopmentMonthSource(run['seed']).read_interval(seq) if run.get('mode')=='replay'
+               else generate(run['seed'],seq,run['scenario_settings']))
+    obs=generated['readings']
     for r in obs.values(): r['run_id']=run['id']
     balances=reconcile(run['id'],seq,obs,run['sigmas']); previous=store.interval(run['id'],seq-1)
     alerts,quality,streaks=detect(run['id'],seq,balances,obs,previous['alerts'] if previous else [],run['streaks'],run['baseline'])
@@ -30,12 +47,34 @@ def step(run):
     for a in alerts:
         a['candidate_meter_ids']=[m for m in a['candidate_meter_ids'] if run['meter_streaks'].get(m.removeprefix('meter-'),0)>=3]
     body=dict(seq=seq,simulation_time=stamp(seq+1),readings=obs,balances=balances,alerts=alerts,quality_events=quality,physical_connections_m=generated['geometry'],physical_occluders=generated['occluders'])
-    store.save_interval(run['id'],seq,body,generated['truth'])
-    run.update(seq=seq,event_seq=run['event_seq']+1,streaks=streaks); store.put('run',run)
-    logging.info('run=%s seq=%d duration_ms=%.2f rule=%s',run['id'],seq,(time.perf_counter()-started)*1000,RULE_VERSION)
+    store.save_interval(run['id'],seq,body,generated['truth'],commit=commit)
+    run.update(seq=seq,selected_seq=seq,event_seq=run['event_seq']+1,streaks=streaks,
+               revision=run.get('revision',0)+1)
+    if seq>=run.get('interval_count',96)-1: run['playing']=False
+    if commit: store.put('run',run)
+    logging.debug('run=%s seq=%d duration_ms=%.2f rule=%s',run['id'],seq,(time.perf_counter()-started)*1000,RULE_VERSION)
+
+
+def seek(run,sequence):
+    if not 0 <= sequence < run.get('interval_count',96):
+        raise ValueError('Sequence is outside this run')
+    if run.get('mode')!='replay' and sequence>run['seq']:
+        raise ValueError('Laboratory seek is limited to observed intervals')
+    # Catch up chronologically once; revisiting a cached frame never changes streaks.
+    run['playing']=False
+    run['selected_seq']=run['seq']
+    try:
+        while run['seq'] < sequence:
+            step(run,commit=False)
+        run.update(selected_seq=sequence,event_seq=run['event_seq']+1,
+                   revision=run.get('revision',0)+1)
+        store.put('run',run)
+    except Exception:
+        store.DB.rollback()
+        raise
 
 def snapshot(rid,seq=None):
-    run=store.get(rid); interval=store.interval(rid,run['seq'] if seq is None else seq)
+    run=store.get(rid); interval=store.interval(rid,run.get('selected_seq',run['seq']) if seq is None else seq)
     history=[]
     for i in range(max(0,interval['seq']-23),interval['seq']+1):
         row=store.interval(rid,i); history.append(dict(seq=i,balances=row['balances']))

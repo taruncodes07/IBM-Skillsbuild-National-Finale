@@ -1,0 +1,635 @@
+{
+  "status": "COMPLETED",
+  "code_hash": "4288902bcd4a1b57564994db57f52486bf9bf4925ed82341a8280bb3664bbb50",
+  "provider": "watsonx",
+  "model": "ibm/granite-4-h-small",
+  "rubric_version": "first-action-pilot-1",
+  "rubric": {
+    "DATA_INCOMPLETE": [
+      "REQUEST_MISSING_DATA",
+      "REQUEST_TOPOLOGY_CHECK"
+    ],
+    "UNEXPLAINED_ENERGY": [
+      "REQUEST_ELECTRICAL_RECHECK",
+      "REQUEST_METER_REVIEW",
+      "REQUEST_TOPOLOGY_CHECK",
+      "REQUEST_LOCALIZATION",
+      "GENERATE_CASE_SUMMARY"
+    ],
+    "REVIEW_MODEL_OR_TOPOLOGY": [
+      "REQUEST_TOPOLOGY_CHECK",
+      "REQUEST_ELECTRICAL_RECHECK"
+    ],
+    "PERSISTENCE_PENDING": [
+      "ABSTAIN_NO_ACTION",
+      "GENERATE_CASE_SUMMARY"
+    ],
+    "WITHIN_MODEL_RANGE": [
+      "ABSTAIN_NO_ACTION",
+      "GENERATE_CASE_SUMMARY"
+    ]
+  },
+  "generated_at": "2026-10-25T08:48:04.726033+00:00",
+  "seed": 20221117,
+  "protocol": {
+    "cases": 9,
+    "max_requests_per_case": 1,
+    "timeout_seconds": 25,
+    "failover": false,
+    "tools_executed": 0,
+    "early_stop_after_consecutive_failures": 2
+  },
+  "disclosure": "Small synthetic first-action pilot with a predeclared observation-based rubric. Same worker evidence and rubric are used for the rules comparison. This is not the full adaptive B2 study, an independent blinded study, a causal diagnosis score or field accuracy. Rubric matches do not measure intervention savings or superiority.",
+  "cases": [
+    {
+      "id": "pilot-01",
+      "mechanism": "clean",
+      "target": "branch-05",
+      "input_hash": "f70981918488694e59bf9b03fc30f153e0cee5c0ca31c2642ee9ee316d08750e",
+      "diagnostic_status": "WITHIN_MODEL_RANGE",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "ABSTAIN_NO_ACTION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "ABSTAIN_NO_ACTION",
+          "target_area_id": "branch-05",
+          "evidence_ids": [
+            "ev-pilot-01-2-branch-05-W1",
+            "ev-pilot-01-2-branch-05-W2",
+            "ev-pilot-01-2-branch-05-W3",
+            "ev-pilot-01-2-branch-05-W4"
+          ],
+          "competing_causes": [],
+          "justification": "Available evidence does not support a persistent significant unexplained residual.",
+          "requires_human_approval": false
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 299,
+        "prompt_tokens": 1755,
+        "total_tokens": 2054
+      },
+      "policy_allowed": true,
+      "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "ABSTAIN_NO_ACTION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "GENERATE_CASE_SUMMARY",
+        "target_area_id": "branch-05",
+        "evidence_ids": [
+          "ev-pilot-01-2-branch-05-W1",
+          "ev-pilot-01-2-branch-05-W2",
+          "ev-pilot-01-2-branch-05-W3"
+        ],
+        "competing_causes": [
+          "Technical loss uncertainty",
+          "Insufficient billing data",
+          "Localization gap"
+        ],
+        "justification": "W1 confirms a small raw gap (0.049\u202fkWh). W2 shows technical losses within model range but also residual values that could indicate loss or measurement error; its assumptions about calibration are weak. W3 reports insufficient billing and consumption history, blocking baseline analysis. Together these three pieces point to ambiguous loss vs. data gaps. The cheapest further check is a registered\u2011topology validation (already captured in W1/W2) to verify meter\u2011to\u2011meter connections and rule out topology\u2011related mis\u2011routing before escalating to external human field work. Requires human approval because the remaining gaps cannot be resolved without field inspection.",
+        "requires_human_approval": true
+      },
+      "elapsed_seconds": 5.76
+    },
+    {
+      "id": "pilot-02",
+      "mechanism": "demand_change",
+      "target": "branch-08",
+      "input_hash": "bdab5fb553f00c982d202ff73aefb62c4b0c1618d44d7196bd2dda3e17e5b7e5",
+      "diagnostic_status": "WITHIN_MODEL_RANGE",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "ABSTAIN_NO_ACTION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "ABSTAIN_NO_ACTION",
+          "target_area_id": "branch-08",
+          "evidence_ids": [
+            "ev-pilot-02-2-branch-08-W1",
+            "ev-pilot-02-2-branch-08-W2",
+            "ev-pilot-02-2-branch-08-W3",
+            "ev-pilot-02-2-branch-08-W4"
+          ],
+          "competing_causes": [],
+          "justification": "Available evidence does not support a persistent significant unexplained residual.",
+          "requires_human_approval": false
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 248,
+        "prompt_tokens": 1784,
+        "total_tokens": 2032
+      },
+      "policy_allowed": true,
+      "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "ABSTAIN_NO_ACTION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "GENERATE_CASE_SUMMARY",
+        "target_area_id": "branch-08",
+        "evidence_ids": [
+          "ev-pilot-02-2-branch-08-W1",
+          "ev-pilot-02-2-branch-08-W2",
+          "ev-pilot-02-2-branch-08-W3"
+        ],
+        "competing_causes": [
+          "Unmetered load",
+          "Meter error",
+          "Data gaps"
+        ],
+        "justification": "W1 shows small raw gap (0.058 kWh) but no unmetered load. W2 reports technical loss within expected range and residuals exceeding threshold, indicating possible metering or data issues. W3 has insufficient data (no billing records, no history). Together they indicate a mixture of data gaps and possible meter error; the cheapest informative next step is to request full billing and payment records to close the data gaps before deeper diagnostics.",
+        "requires_human_approval": false
+      },
+      "elapsed_seconds": 4.399
+    },
+    {
+      "id": "pilot-03",
+      "mechanism": "missing",
+      "target": "branch-07",
+      "input_hash": "dd1f29dcd3d3be685a5d84d695f6413962ed5e5a1545fc061f7feee1992349b5",
+      "diagnostic_status": "DATA_INCOMPLETE",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_MISSING_DATA",
+          "REQUEST_TOPOLOGY_CHECK"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_MISSING_DATA",
+          "target_area_id": "branch-07",
+          "evidence_ids": [
+            "ev-pilot-03-2-branch-07-W1",
+            "ev-pilot-03-2-branch-07-W2",
+            "ev-pilot-03-2-branch-07-W3",
+            "ev-pilot-03-2-branch-07-W4"
+          ],
+          "competing_causes": [],
+          "justification": "Restore missing or invalid measurements before interpreting the cut.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 197,
+        "prompt_tokens": 1760,
+        "total_tokens": 1957
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_MISSING_DATA",
+        "REQUEST_TOPOLOGY_CHECK"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_MISSING_DATA",
+        "target_area_id": "branch-07",
+        "evidence_ids": [
+          "ev-pilot-03-2-branch-07-W1",
+          "ev-pilot-03-2-branch-07-W2",
+          "ev-pilot-03-2-branch-07-W3"
+        ],
+        "competing_causes": [
+          "Missing meter data (meter-household-19)",
+          "Incomplete measurement inputs (voltage, power factor, line impedance, transformer specs)"
+        ],
+        "justification": "All three workers report insufficient data due to missing measurements and meter readings, preventing definitive loss quantification. Requesting additional missing data is the cheapest action that could resolve these gaps, avoiding premature topology checks.",
+        "requires_human_approval": false
+      },
+      "elapsed_seconds": 3.698
+    },
+    {
+      "id": "pilot-04",
+      "mechanism": "mapping",
+      "target": "branch-02",
+      "input_hash": "c4620fd43218af5a796e97a816300d3e566dd9966f7b8aa9db90c6efd01fafd9",
+      "diagnostic_status": "DATA_INCOMPLETE",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_MISSING_DATA",
+          "REQUEST_TOPOLOGY_CHECK"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_MISSING_DATA",
+          "target_area_id": "branch-02",
+          "evidence_ids": [
+            "ev-pilot-04-2-branch-02-W1",
+            "ev-pilot-04-2-branch-02-W2",
+            "ev-pilot-04-2-branch-02-W3",
+            "ev-pilot-04-2-branch-02-W4"
+          ],
+          "competing_causes": [],
+          "justification": "Restore missing or invalid measurements before interpreting the cut.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 182,
+        "prompt_tokens": 1742,
+        "total_tokens": 1924
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_MISSING_DATA",
+        "REQUEST_TOPOLOGY_CHECK"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_MISSING_DATA",
+        "target_area_id": "branch-02",
+        "evidence_ids": [
+          "ev-pilot-04-2-branch-02-W1",
+          "ev-pilot-04-2-branch-02-W2",
+          "ev-pilot-04-2-branch-02-W3"
+        ],
+        "competing_causes": [],
+        "justification": "Data incomplete; missing voltage, power factor, line impedance, transformer specs, billing records and historical consumption. Requesting missing data is simplest to enable further analysis, while topology check could address the meter-household-04 mismatch but would not resolve other gaps. Human review required.",
+        "requires_human_approval": true
+      },
+      "elapsed_seconds": 5.027
+    },
+    {
+      "id": "pilot-05",
+      "mechanism": "extra_load",
+      "target": "branch-06",
+      "input_hash": "7983a81c3b630e2b0e15b6604b3a1ec12702aaa841861fa0ee65541761184a55",
+      "diagnostic_status": "UNEXPLAINED_ENERGY",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_ELECTRICAL_RECHECK",
+          "REQUEST_METER_REVIEW",
+          "REQUEST_TOPOLOGY_CHECK",
+          "REQUEST_LOCALIZATION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_METER_REVIEW",
+          "target_area_id": "branch-06",
+          "evidence_ids": [
+            "ev-pilot-05-2-branch-06-W1",
+            "ev-pilot-05-2-branch-06-W2",
+            "ev-pilot-05-2-branch-06-W3",
+            "ev-pilot-05-2-branch-06-W4"
+          ],
+          "competing_causes": [
+            "METER_FAULT",
+            "UNMETERED_LOAD",
+            "TECHNICAL_MODEL_ERROR",
+            "TOPOLOGY_MISMATCH",
+            "AUTHORIZED_UNMETERED_LOAD"
+          ],
+          "justification": "Persistent unexplained energy has several possible causes. Obtain an independent meter/field check.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 203,
+        "prompt_tokens": 2137,
+        "total_tokens": 2340
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_ELECTRICAL_RECHECK",
+        "REQUEST_METER_REVIEW",
+        "REQUEST_TOPOLOGY_CHECK",
+        "REQUEST_LOCALIZATION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_TOPOLOGY_CHECK",
+        "target_area_id": "branch-06",
+        "evidence_ids": [
+          "ev-pilot-05-2-branch-06-W1",
+          "ev-pilot-05-2-branch-06-W2"
+        ],
+        "competing_causes": [
+          "METER_FAULT",
+          "UNMETERED_LOAD",
+          "TECHNICAL_MODEL_ERROR",
+          "TOPOLOGY_MISMATCH",
+          "AUTHORIZED_UNMETERED_LOAD"
+        ],
+        "justification": "The top three evidence entries (W1, W2) flag potential meter fault or unauthorized load, but the residual and technical loss ranges remain ambiguous. A targeted topology validation can confirm line connectivity and isolate sections, providing the most informative evidence with low cost before deeper investigations.",
+        "requires_human_approval": false
+      },
+      "elapsed_seconds": 4.059
+    },
+    {
+      "id": "pilot-06",
+      "mechanism": "underregistration",
+      "target": "branch-05",
+      "input_hash": "3cda9d1a9d61bd42f49d474997f561dac29054aea4692459c71c6ead5ea696f7",
+      "diagnostic_status": "UNEXPLAINED_ENERGY",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_ELECTRICAL_RECHECK",
+          "REQUEST_METER_REVIEW",
+          "REQUEST_TOPOLOGY_CHECK",
+          "REQUEST_LOCALIZATION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_METER_REVIEW",
+          "target_area_id": "branch-05",
+          "evidence_ids": [
+            "ev-pilot-06-2-branch-05-W1",
+            "ev-pilot-06-2-branch-05-W2",
+            "ev-pilot-06-2-branch-05-W3",
+            "ev-pilot-06-2-branch-05-W4"
+          ],
+          "competing_causes": [
+            "METER_FAULT",
+            "UNMETERED_LOAD",
+            "TECHNICAL_MODEL_ERROR",
+            "TOPOLOGY_MISMATCH",
+            "AUTHORIZED_UNMETERED_LOAD"
+          ],
+          "justification": "Persistent unexplained energy has several possible causes. Obtain an independent meter/field check.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 214,
+        "prompt_tokens": 2125,
+        "total_tokens": 2339
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_ELECTRICAL_RECHECK",
+        "REQUEST_METER_REVIEW",
+        "REQUEST_TOPOLOGY_CHECK",
+        "REQUEST_LOCALIZATION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_METER_REVIEW",
+        "target_area_id": "branch-05",
+        "evidence_ids": [
+          "ev-pilot-06-2-branch-05-W1",
+          "ev-pilot-06-2-branch-05-W2",
+          "ev-pilot-06-2-branch-05-W3"
+        ],
+        "competing_causes": [
+          "METER_FAULT",
+          "UNMETERED_LOAD",
+          "TECHNICAL_MODEL_ERROR"
+        ],
+        "justification": "The diagnostic status indicates unexplained energy loss with multiple candidate causes, but insufficient billing and meter data prevent definitive fault detection. A targeted meter review is the cheapest check that can confirm or rule out meter faults, which are common in pilot data.",
+        "requires_human_approval": true
+      },
+      "elapsed_seconds": 3.5
+    },
+    {
+      "id": "pilot-07",
+      "mechanism": "technical_loss",
+      "target": "branch-01",
+      "input_hash": "aa847958eb89fd65e183e14ae27b54cb69c557d1a8f48cabd8cdda903d63d50a",
+      "diagnostic_status": "UNEXPLAINED_ENERGY",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_ELECTRICAL_RECHECK",
+          "REQUEST_METER_REVIEW",
+          "REQUEST_TOPOLOGY_CHECK",
+          "REQUEST_LOCALIZATION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_METER_REVIEW",
+          "target_area_id": "branch-01",
+          "evidence_ids": [
+            "ev-pilot-07-2-branch-01-W1",
+            "ev-pilot-07-2-branch-01-W2",
+            "ev-pilot-07-2-branch-01-W3",
+            "ev-pilot-07-2-branch-01-W4"
+          ],
+          "competing_causes": [
+            "METER_FAULT",
+            "UNMETERED_LOAD",
+            "TECHNICAL_MODEL_ERROR",
+            "TOPOLOGY_MISMATCH",
+            "AUTHORIZED_UNMETERED_LOAD"
+          ],
+          "justification": "Persistent unexplained energy has several possible causes. Obtain an independent meter/field check.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 266,
+        "prompt_tokens": 2137,
+        "total_tokens": 2403
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_ELECTRICAL_RECHECK",
+        "REQUEST_METER_REVIEW",
+        "REQUEST_TOPOLOGY_CHECK",
+        "REQUEST_LOCALIZATION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_ELECTRICAL_RECHECK",
+        "target_area_id": "branch-01",
+        "evidence_ids": [
+          "ev-pilot-07-2-branch-01-W1",
+          "ev-pilot-07-2-branch-01-W2",
+          "ev-pilot-07-2-branch-01-W4"
+        ],
+        "competing_causes": [
+          "METER_FAULT",
+          "UNMETERED_LOAD",
+          "TECHNICAL_MODEL_ERROR",
+          "TOPOLOGY_MISMATCH",
+          "AUTHORIZED_UNMETERED_LOAD"
+        ],
+        "justification": "The synthetic challenge shows a raw energy gap of 0.85\u202fkWh with no unauthorized unmetered load. W1 and W2 flag possible meter faults, technical model error, or topology mismatch, while W4 notes the need for field verification. An electrical recheck can directly verify meter readings and line conditions, addressing the highest\u2011priority information gaps without further assumptions.",
+        "requires_human_approval": true
+      },
+      "elapsed_seconds": 4.22
+    },
+    {
+      "id": "pilot-08",
+      "mechanism": "authorized_unmetered",
+      "target": "branch-02",
+      "input_hash": "a8e3940544661b9e0ccd90f65951a36363221eb12bda51da23f8b99502b291fd",
+      "diagnostic_status": "UNEXPLAINED_ENERGY",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "REQUEST_ELECTRICAL_RECHECK",
+          "REQUEST_METER_REVIEW",
+          "REQUEST_TOPOLOGY_CHECK",
+          "REQUEST_LOCALIZATION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "REQUEST_METER_REVIEW",
+          "target_area_id": "branch-02",
+          "evidence_ids": [
+            "ev-pilot-08-2-branch-02-W1",
+            "ev-pilot-08-2-branch-02-W2",
+            "ev-pilot-08-2-branch-02-W3",
+            "ev-pilot-08-2-branch-02-W4"
+          ],
+          "competing_causes": [
+            "METER_FAULT",
+            "UNMETERED_LOAD",
+            "TECHNICAL_MODEL_ERROR",
+            "TOPOLOGY_MISMATCH",
+            "AUTHORIZED_UNMETERED_LOAD"
+          ],
+          "justification": "Persistent unexplained energy has several possible causes. Obtain an independent meter/field check.",
+          "requires_human_approval": true
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 251,
+        "prompt_tokens": 2149,
+        "total_tokens": 2400
+      },
+      "policy_allowed": true,
+      "policy_reason": "Registered action and evidence validated; external checks remain human tasks",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "REQUEST_ELECTRICAL_RECHECK",
+        "REQUEST_METER_REVIEW",
+        "REQUEST_TOPOLOGY_CHECK",
+        "REQUEST_LOCALIZATION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "REQUEST_ELECTRICAL_RECHECK",
+        "target_area_id": "branch-02",
+        "evidence_ids": [
+          "ev-pilot-08-2-branch-02-W1",
+          "ev-pilot-08-2-branch-02-W2",
+          "ev-pilot-08-2-branch-02-W4"
+        ],
+        "competing_causes": [
+          "METER_FAULT",
+          "UNMETERED_LOAD",
+          "TECHNICAL_MODEL_ERROR",
+          "TOPOLOGY_MISMATCH",
+          "AUTHORIZED_UNMETERED_LOAD"
+        ],
+        "justification": "The pilot shows a raw energy gap (0.94\u202fkWh) with conflicting technical-loss estimates and no verified meter data. The cheapest informative step is to re\u2011run the electrical window summary using the existing measured data, which may expose instrumentation error or data\u2011collection issues without adding cost.",
+        "requires_human_approval": false
+      },
+      "elapsed_seconds": 4.174
+    },
+    {
+      "id": "pilot-09",
+      "mechanism": "weak_load",
+      "target": "branch-03",
+      "input_hash": "95f1aef95540d7b0876fa1c67f709fae0bea0367571833ad1e070bee6b0e16da",
+      "diagnostic_status": "WITHIN_MODEL_RANGE",
+      "rules": {
+        "policy_allowed": true,
+        "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+        "rubric_match": true,
+        "acceptable_actions": [
+          "ABSTAIN_NO_ACTION",
+          "GENERATE_CASE_SUMMARY"
+        ],
+        "proposal": {
+          "next_action": "ABSTAIN_NO_ACTION",
+          "target_area_id": "branch-03",
+          "evidence_ids": [
+            "ev-pilot-09-2-branch-03-W1",
+            "ev-pilot-09-2-branch-03-W2",
+            "ev-pilot-09-2-branch-03-W3",
+            "ev-pilot-09-2-branch-03-W4"
+          ],
+          "competing_causes": [],
+          "justification": "Available evidence does not support a persistent significant unexplained residual.",
+          "requires_human_approval": false
+        }
+      },
+      "status": "COMPLETED",
+      "usage": {
+        "completion_tokens": 214,
+        "prompt_tokens": 1761,
+        "total_tokens": 1975
+      },
+      "policy_allowed": true,
+      "policy_reason": "Only abstention or a summary of existing evidence is authorized. No diagnostic check is authorized for normal or nonpersistent measurements.",
+      "rubric_match": true,
+      "acceptable_actions": [
+        "ABSTAIN_NO_ACTION",
+        "GENERATE_CASE_SUMMARY"
+      ],
+      "proposal": {
+        "next_action": "GENERATE_CASE_SUMMARY",
+        "target_area_id": "branch-03",
+        "evidence_ids": [
+          "ev-pilot-09-2-branch-03-W1",
+          "ev-pilot-09-2-branch-03-W2",
+          "ev-pilot-09-2-branch-03-W4"
+        ],
+        "competing_causes": [
+          "Technical loss variance",
+          "Insufficient billing data"
+        ],
+        "justification": "The pilot shows a measurable raw gap (0.125\u202fkWh) and technical loss estimates within model range, but W3 reports insufficient billing data and W4 indicates no localization. The cheapest informative next step is to generate a concise case summary that reconciles these findings, flagging the data gaps for human follow\u2011up without requesting additional diagnostic checks.",
+        "requires_human_approval": true
+      },
+      "elapsed_seconds": 3.629
+    }
+  ],
+  "summary": {
+    "total_cases": 9,
+    "completed_cases": 9,
+    "failed_cases": 0,
+    "skipped_cases": 0,
+    "policy_allowed_cases": 9,
+    "rubric_matches": 9,
+    "rules_rubric_matches": 9,
+    "elapsed_seconds": 38.466,
+    "prompt_tokens": 17350,
+    "completion_tokens": 2074
+  }
+}

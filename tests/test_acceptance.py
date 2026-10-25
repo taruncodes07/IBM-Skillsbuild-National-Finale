@@ -144,7 +144,7 @@ def test_case_roles_revision_mission_export_and_reopen(client,seed):
     assert hashlib.sha256(report.content).hexdigest()==report.headers['X-Content-SHA256']
     assert data['evidence'][0]['original_sha256']==original_hash
     assert data['analysis']['readings'];assert data['run']['rule_version'];assert len(data['audit'])>=12;assert len(data['contributing_intervals'])==3
-    assert client.get(f'/api/cases/{cid}/export?format=md').content.startswith(b'# GridTrace')
+    assert client.get(f'/api/cases/{cid}/export?format=md').content.startswith(b'# Grid Trace')
     # A fresh Python process opens the same DB and local PNGs after the writer commits.
     script="from backend import store; import hashlib,json,sys; c=store.get(sys.argv[1]); e=store.get(c['evidence_ids'][-1]); raw=(store.ROOT/'evidence'/e['original_image_path'].split('/')[-1]).read_bytes(); print(json.dumps({'case_id':c['id'],'stored_hash':e['original_sha256'],'file_hash':hashlib.sha256(raw).hexdigest(),'events':len(store.audits(c['id']))}))"
     fresh=subprocess.run([sys.executable,'-c',script,cid],capture_output=True,text=True,check=True)

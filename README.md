@@ -1,4 +1,6 @@
-# GridTrace
+# Grid Trace
+
+Local development milestone: September 2022 replay, W1-W4 workers, evidence fusion, LangGraph orchestration, Granite/Gemini transport adapters, worker-linked case exports, conditional finance and diagnostic baseline results are implemented. The app currently uses clearly labeled development fixtures; original source onboarding and Gemini live verification are pending. See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) and [docs/PROVIDERS.md](docs/PROVIDERS.md). The older verification records below describe the original scenario laboratory.
 
 A local, simulation-backed electricity-distribution investigation application. **Synthetic demonstration:** every asset, reading, incident, flight and image is synthetic. Unexplained energy and visible line candidates do not establish theft, authorization or energization.
 
@@ -43,7 +45,7 @@ The identity selector is a simulated, backend-enforced role gate. It is **not au
 ## Simulation and accounting
 
 - `backend/topology.py` defines 2 feeders, 4 transformers, 8 monitored branches, 24 household meters and 8 branch poles. There are 38 measurement streams. Coordinates are local meters; no geographic position is claimed.
-- Every new seed independently generates seven clean baseline days (672 intervals). Same-time household means and section residual standard deviations are retained. The scenario day has 96 UTC-aligned 15-minute intervals starting 24 October 2026 08:00 UTC. The interface names Asia/Kolkata; wall and simulation time are separate.
+- Every new seed independently generates seven clean baseline days (672 intervals). Same-time household means and section residual standard deviations are retained. The scenario laboratory has 96 intervals starting 1 September 2022 00:00 IST. Month replay has 2,880 intervals across September 2022. The interface names Asia/Kolkata; wall and simulation time are separate.
 - `backend/simulation.py` constructs physical household demand and losses, then observed readings with ±0.2% meter noise. Private truth is persisted separately from public observations. Hidden loads increase upstream physical inputs; under-registration only changes the affected meter observation.
 - `backend/analytics.py` imports neither simulator nor truth store. It receives observed readings, approved topology and clean-baseline parameters. Each section uses its immediate downstream instrumented cut, never a mix of descendants. Only disjoint sections may be aggregated.
 - Accounting: `R = input − downstream interval kWh − declared authorized energy − expected loss`. Authorized unmetered energy is explicitly configured to zero for this topology.

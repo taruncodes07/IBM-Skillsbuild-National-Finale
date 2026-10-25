@@ -1,4 +1,6 @@
-# GridTrace — Electricity Distribution Digital Twin
+# Grid Trace — Electricity Distribution Digital Twin
+
+> Historical specification for the original scenario laboratory. The governing local specification is `../VIDYUT_TRACE_FINAL_PRD.pdf`; current implementation priorities and branding follow `../GRID_TRACE_BUILD_PLAN.md` and `docs/BUILD_STATUS.md`.
 
 ## Product requirements document
 

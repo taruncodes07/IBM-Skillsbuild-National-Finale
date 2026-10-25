@@ -4,3 +4,4 @@ numpy==2.4.3
 opencv-python-headless==4.13.0.92
 httpx==0.28.1
 pytest==9.0.2
+langgraph==1.2.17

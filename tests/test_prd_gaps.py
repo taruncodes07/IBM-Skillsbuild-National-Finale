@@ -186,6 +186,51 @@ def test_ac13_coverage_endpoints_and_streak_reset(client):
     assert b3['validity'] == 'insufficient_observability'
 
 
+def test_ac13_coverage_change_recomputes_the_interval_already_on_screen(client):
+    """Regression: a coverage switch must not leave balances computed under the old cut.
+
+    Before the fix the run reported the new profile while still showing a valid branch
+    residual and an active alert until the operator stepped, so the display contradicted
+    the stated inventory.
+    """
+    snapshot = post(client, '/runs', dict(seed=42, scenario='visible_unmetered_load',
+                                          coverage_profile='full_sectional'))
+    rid = snapshot['run']['id']
+    for _ in range(4):
+        post(client, f'/runs/{rid}/control', dict(command='step'))
+
+    before = client.get(f'/api/runs/{rid}/snapshot').json()
+    assert any(a['status'] == 'active' for a in before['alerts'])
+    assert next(b for b in before['balances'] if b['boundary_asset_id'] == 'branch-03')['validity'] == 'valid'
+    sequence = before['seq']
+
+    post(client, f'/runs/{rid}/coverage', dict(profile_id='tgspdcl_like'), 'presenter')
+
+    after = client.get(f'/api/runs/{rid}/snapshot').json()
+    assert after['seq'] == sequence, 'the switch must not advance the run'
+    assert next(b for b in after['balances'] if b['boundary_asset_id'] == 'branch-03')['validity'] == 'insufficient_observability'
+    assert not [a for a in after['alerts'] if a['status'] == 'active']
+    assert any(q['kind'] == 'observability' for q in after['quality_events'])
+
+    # Reversible, and the recomputation is recorded rather than silently overwriting history.
+    post(client, f'/runs/{rid}/coverage', dict(profile_id='full_sectional'), 'presenter')
+    restored = client.get(f'/api/runs/{rid}/snapshot').json()
+    assert next(b for b in restored['balances'] if b['boundary_asset_id'] == 'branch-03')['validity'] == 'valid'
+    assert any(a['status'] == 'active' for a in restored['alerts'])
+
+    history = client.get(f'/api/runs/{rid}/analysis-revisions').json()
+    assert len(history['recomputations']) == 2
+    assert all('coverage changed' in r['reason'] for r in history['recomputations'])
+    assert history['revisions'], 'earlier analyses must be retained'
+
+
+def test_ac13_switching_to_the_same_profile_is_a_no_op(client):
+    snapshot = post(client, '/runs', dict(seed=42, scenario='clean', coverage_profile='full_sectional'))
+    rid = snapshot['run']['id']
+    post(client, f'/runs/{rid}/coverage', dict(profile_id='full_sectional'), 'presenter')
+    assert client.get(f'/api/runs/{rid}/analysis-revisions').json()['recomputations'] == []
+
+
 def test_ac13_scenario_h_run_reports_an_observability_gap(client):
     """Scenario H: sparse RDSS-style rollout cannot support branch localization."""
     snapshot = post(client, '/runs', dict(seed=42, scenario='visible_unmetered_load',

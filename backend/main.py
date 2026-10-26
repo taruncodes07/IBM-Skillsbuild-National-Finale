@@ -273,7 +273,7 @@ async def set_coverage(rid:str,body:CoverageInput,x_actor:str=Header(default='an
     run=require(rid,'run')
     if any(m['run_id']==rid and m['status'] not in ('completed','failed','cancelled') for m in store.all_of('mission')):
         raise HTTPException(409,'Finish or cancel the active mission before changing coverage')
-    engine.set_coverage(run,body.profile_id)
+    engine.set_coverage(run,body.profile_id,x_actor)
     return coverage.summary(body.profile_id,ASSETS)
 
 @app.get('/api/balances/{bid}/actions')

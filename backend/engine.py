@@ -39,18 +39,49 @@ def create_run(seed=42,scenario='clean',mode='laboratory',coverage_profile=cover
     store.put('run',run); step(run); return store.get(rid)
 
 
-def set_coverage(run,profile_id):
+def set_coverage(run,profile_id,actor='presenter'):
     """Changing installed inventory creates a new inventory version and clears persistence.
 
-    Streaks earned under a different instrumented cut cannot carry over (PRD AC-13).
+    Every already-analysed interval is recomputed against the new inventory, so the
+    displayed balances can never describe a cut that is no longer instrumented. Streaks
+    earned under a different cut cannot carry over (PRD AC-13). Observations are untouched:
+    only which meters are considered installed changes. Earlier analyses are retained.
     """
     if profile_id not in coverage.PROFILES: raise ValueError('Unknown coverage profile')
+    if profile_id==run.get('coverage_profile',coverage.DEFAULT_PROFILE): return run
     run['coverage_profile']=profile_id
     run['inventory_version']=coverage.inventory_version(profile_id)
-    run['streaks']={}; run['meter_streaks']={}
+    run['analysis_revision']=run.get('analysis_revision',1)+1
+    revision=run['analysis_revision']
+    installed=installed_for(run)
+    previous=[];streaks={};meter_streaks={}
+    for i in range(run['seq']+1):
+        observed=store.interval(run['id'],i)
+        if observed is None: continue
+        store.put('analysis-revision',dict(id=f"{run['id']}-sequence-{i}-revision-{observed.get('analysis_revision',1)}",**observed))
+        balances=reconcile(run['id'],i,observed['readings'],run['sigmas'],installed)
+        for b in balances: b['id']+=f'-r{revision}'; b['analysis_revision']=revision
+        alerts,quality_events,streaks=detect(run['id'],i,balances,observed['readings'],previous,streaks,run['baseline'])
+        for hid in run['baseline']:
+            r=observed['readings'][hid]; expected=run['baseline'][hid][i%96]
+            low=expected>=.15 and r['quality']=='valid' and r['energy_import_kwh'] is not None and r['energy_import_kwh']<.5*expected
+            meter_streaks[hid]=meter_streaks.get(hid,0)+1 if low else 0
+        for a in alerts:
+            a['balance_ids']=[f"balance-{run['id']}-{k}-{a['boundary_asset_id']}-r{revision}" for k in range(a['first_interval'],a['last_interval']+1)]
+            a['candidate_meter_ids']=[m for m in a['candidate_meter_ids'] if meter_streaks.get(m.removeprefix('meter-'),0)>=3]
+        observed.update(balances=balances,alerts=alerts,quality_events=quality_events,analysis_revision=revision)
+        store.DB.execute('UPDATE intervals SET body=? WHERE run_id=? AND seq=?',
+                         (__import__('json').dumps(observed,allow_nan=False),run['id'],i))
+        previous=alerts
+    run['streaks']=streaks; run['meter_streaks']=meter_streaks
     run['event_seq']=run.get('event_seq',0)+1
     run['revision']=run.get('revision',0)+1
     store.put('run',run)
+    store.put('recomputation',dict(id=store.uid('recompute'),run_id=run['id'],sequence=run['seq'],
+        asset_id='(all monitored boundaries)',actor=actor,analysis_revision=revision,
+        wall_timestamp=store.now(),simulation_timestamp=stamp(run['seq']+1),
+        reason=f'Metering coverage changed to {profile_id}; every analysed interval was recomputed '
+               f'against the new inventory and persistence was cleared. Observations are unchanged.'))
     return run
 
 def step(run,commit=True):

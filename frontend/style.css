@@ -133,3 +133,27 @@ h2{font-size:18px;letter-spacing:-.4px}h3{font-size:13px;letter-spacing:.1px}sma
 .coverage-switch{display:flex;align-items:center;gap:7px;font-size:.74rem;color:#8d9dac;white-space:nowrap}
 .coverage-switch select{font-size:.76rem;padding:4px 7px;max-width:190px}
 .coverage-switch small{color:#6f7f8e;font-size:.66rem}
+
+/* Data provenance and recomputation history */
+.provenance-panel{margin:14px 0 4px}
+.provenance-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;border:1px solid #2b3a49;background:#121a22;font-size:.72rem;color:#9fb0c0;cursor:pointer;transition:border-color .18s ease,background .18s ease}
+.provenance-chip:hover{border-color:#3b4e60;background:#16202a}
+.provenance-chip code{font-size:.68rem;color:#7d8d9c}
+.provenance-chip em{font-style:normal;color:#f0b24a;font-size:.68rem}
+.provenance-detail{margin-top:10px;padding:12px;border:1px solid #24313e;border-radius:10px;background:#0f161d}
+.provenance-detail h4{margin:12px 0 7px;font-size:.78rem;color:#b8c6d4;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.03em}
+.provenance-detail h4:first-child{margin-top:0}
+.provenance-detail dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:.74rem}
+.provenance-detail dt{color:#7d8d9c}
+.provenance-detail dd{margin:0;color:#b8c6d4;word-break:break-word}
+.provenance-disclosure{display:flex;gap:7px;align-items:flex-start;margin:9px 0 0;padding:8px 10px;border-radius:7px;background:#1a1710;font-size:.74rem;line-height:1.45;color:#c9b894}
+.provenance-disclosure>svg{flex:none;margin-top:2px;color:#f0b24a}
+.source-row{padding:7px 0;border-top:1px solid #1a222b;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.source-row strong{font-size:.76rem;font-weight:500;color:#b8c6d4}
+.source-row small{grid-column:1/-1;color:#6f7f8e;font-size:.7rem;line-height:1.4}
+.source-status{font-size:.66rem;padding:2px 7px;border-radius:999px;align-self:start}
+.source-status.pending{background:#2a2113;color:#f0b24a}
+.revision-row{display:flex;gap:8px;padding:7px 0;border-top:1px solid #1a222b;align-items:flex-start}
+.revision-row>svg{flex:none;margin-top:3px;color:#57dce8}
+.revision-row strong{display:block;font-size:.76rem;font-weight:500;color:#b8c6d4}
+.revision-row small{display:block;color:#6f7f8e;font-size:.7rem;line-height:1.4}

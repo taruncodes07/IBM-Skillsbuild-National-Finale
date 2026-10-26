@@ -1,1 +1,133 @@
-{"schema_version":"1.0","disclosure":"Synthetic demonstration","default_seed":42,"calibration_seeds":[11,23,37,49],"held_out_seeds":[101,102,103,104,105,106,107,108,109,110,111,112],"presets":{"clean":{"scenario":"clean"},"visible_connection":{"scenario":"visible_unmetered_load","target":"branch-03","start":1,"end":80,"severity_kwh":1.2},"missing_meter":{"scenario":"missing_telemetry","target":"branch-03","meter":"meter-household-07","start":1,"end":80},"legitimate_change":{"scenario":"legitimate_load_change","target":"branch-03","multiplier":1.2},"meter_fault":{"scenario":"meter_underregistration","target":"branch-03","reported_fraction":0.15},"hidden_connection":{"scenario":"hidden_bypass"},"occluded_connection":{"scenario":"occlusion"},"stale_mapping":{"scenario":"topology_mismatch"},"model_shift":{"scenario":"technical_loss_change"}}}
+{
+ "schema_version": "1.0",
+ "disclosure": "Synthetic demonstration",
+ "default_seed": 42,
+ "calibration_seeds": [
+  11,
+  23,
+  37,
+  49
+ ],
+ "held_out_seeds": [
+  101,
+  102,
+  103,
+  104,
+  105,
+  106,
+  107,
+  108,
+  109,
+  110,
+  111,
+  112
+ ],
+ "presets": {
+  "clean": {
+   "scenario": "clean"
+  },
+  "visible_connection": {
+   "scenario": "visible_unmetered_load",
+   "target": "branch-03",
+   "start": 1,
+   "end": 80,
+   "severity_kwh": 1.2
+  },
+  "missing_meter": {
+   "scenario": "missing_telemetry",
+   "target": "branch-03",
+   "meter": "meter-household-07",
+   "start": 1,
+   "end": 80
+  },
+  "legitimate_change": {
+   "scenario": "legitimate_load_change",
+   "target": "branch-03",
+   "multiplier": 1.2
+  },
+  "meter_fault": {
+   "scenario": "meter_underregistration",
+   "target": "branch-03",
+   "reported_fraction": 0.15
+  },
+  "hidden_connection": {
+   "scenario": "hidden_bypass"
+  },
+  "occluded_connection": {
+   "scenario": "occlusion"
+  },
+  "stale_mapping": {
+   "scenario": "topology_mismatch"
+  },
+  "model_shift": {
+   "scenario": "technical_loss_change"
+  },
+  "matched_residual_complete": {
+   "scenario": "matched_residual_complete",
+   "target": "branch-03",
+   "start": 1,
+   "end": 80,
+   "severity_kwh": 1.2,
+   "scenario_group": "G",
+   "evidence": "complete",
+   "expected": "Valid residual near 1.2 kWh; the check follows the evidence, not the scenario name."
+  },
+  "matched_residual_incomplete": {
+   "scenario": "matched_residual_incomplete",
+   "target": "branch-03",
+   "start": 1,
+   "end": 80,
+   "severity_kwh": 1.2,
+   "scenario_group": "G",
+   "evidence": "missing_reading",
+   "expected": "Residual stays null and data repair is recommended; a missing reading is never zero-filled."
+  },
+  "matched_residual_stale_mapping": {
+   "scenario": "matched_residual_stale_mapping",
+   "target": "branch-03",
+   "start": 1,
+   "end": 80,
+   "severity_kwh": 1.2,
+   "scenario_group": "G",
+   "evidence": "stale_topology",
+   "expected": "Comparable apparent excess routed to a mapping and model check, not a loss dispatch."
+  },
+  "matched_residual_model_shift": {
+   "scenario": "matched_residual_model_shift",
+   "target": "branch-03",
+   "start": 1,
+   "end": 80,
+   "scenario_group": "G",
+   "evidence": "elevated_technical_loss",
+   "expected": "Comparable apparent excess from an elevated technical loss alone; no unmetered load is injected."
+  }
+ },
+ "scenario_groups": {
+  "G": {
+   "name": "Matched apparent residual",
+   "purpose": "Hold the displayed imbalance comparable while varying evidence quality, so the recommended next check must follow the observed evidence rather than the scenario name.",
+   "acceptance": "AC-05"
+  },
+  "H": {
+   "name": "Sparse metering rollout",
+   "purpose": "Feeder and consumer metering only, so no branch localization is supported and the system must declare an observability gap.",
+   "acceptance": "AC-13",
+   "coverage_profile": "tgspdcl_like"
+  }
+ },
+ "coverage_profiles": {
+  "note": "Installed-inventory profiles applied to a fictional network. Published counts describe metering installation at one date for a real utility; they do not establish communication health, mapping correctness, or any tested deployment.",
+  "default": "full_sectional",
+  "profiles": [
+   "full_sectional",
+   "tpddl_like",
+   "bescom_like",
+   "tgspdcl_like",
+   "pgvcl_like"
+  ],
+  "sources": [
+   "CEA, Status of Metering in the Country, reference date 31 March 2025",
+   "PGVCL BEE energy audit FY2023-24"
+  ]
+ }
+}

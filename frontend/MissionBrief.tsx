@@ -2,7 +2,7 @@ import {Camera,CheckCircle2,Navigation,ScanLine,ShieldCheck} from 'lucide-react'
 import type {FlightTelemetry} from './flight';
 export default function MissionBrief({area,state,actor,busy,progress,telemetry,captures,view,onView,onLaunch,onTriage,onReviewer,onResume,ready,interrupted,onRestart}:{area:string;state:string;actor:string;busy:boolean;progress:string;telemetry:FlightTelemetry|null;captures:number;view:'flight'|'evidence';onView:(v:'flight'|'evidence')=>void;onLaunch:()=>void;onTriage:()=>void;onReviewer:()=>void;onResume:()=>void;ready:boolean;interrupted:boolean;onRestart:()=>void}){
  const reviewer=['reviewer','supervisor'].includes(actor);
- const eligible=['triaged','evidence_ready','under_review'].includes(state);
+ const eligible=['ground_review','evidence_ready','under_review'].includes(state);
  const phase=progress.startsWith('Flying')?1:progress.startsWith('Capturing')?2:interrupted?0:captures?3:0;
  return <div className="mission-brief">
   <div className="mission-title"><div><span className="eyebrow"><Navigation size={13}/> Aerial inspection · simulated</span><h2>{area.replace('branch-','Branch ')} inspection</h2><p>{progress||'One approved route. Two overhead views. Evidence you can review.'}</p></div><span className={'mission-badge '+(progress?'active':'')}><span/>{progress?'Mission active':interrupted?'Inspection paused':captures?'Evidence ready':'Ready to plan'}</span></div>

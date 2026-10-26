@@ -1,7 +1,7 @@
 {
   "status": "COMPLETED",
-  "code_hash": "eaaccaf0848654d8a173d59a2defafbf05ac771de03fc16df23374b73812e821",
-  "generated_at": "2026-10-25T12:49:33.779558+00:00",
+  "code_hash": "82b6ef0b75f9d6973578793a2bc189d7a7104386bec10f988d6cd6692dcefe1f",
+  "generated_at": "2026-10-26T15:16:35.279318+00:00",
   "disclosure": "36 independently constructed synthetic diagnostic cases; includes weak events and parameter mismatch. This is not a blinded external team study, a rendered CV test or field accuracy. Authorized unmetered loads count as unexplained accounting events, not wrongdoing.",
   "policies": {
     "B0": {

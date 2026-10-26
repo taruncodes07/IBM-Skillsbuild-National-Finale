@@ -38,3 +38,13 @@ def validate_cut(boundary, cut):
     if len(cut) != len(set(cut)) or set(cut) != set(CHILDREN[boundary]):
         raise ValueError('Cut must cover immediate downstream meters exactly once; nested descendants are forbidden')
     return True
+
+# P0 10-stream radial slice per PRD v5.0 Section 1 and Section 4:
+# 1 feeder, 1 transformer, 2 branches, 6 households = 10 measurement streams.
+P0_SLICE_ASSET_IDS = [
+    'feeder-01',
+    'transformer-02',
+    'branch-03', 'branch-04',
+    'household-07', 'household-08', 'household-09',
+    'household-10', 'household-11', 'household-12'
+]

@@ -256,9 +256,12 @@ def test_ac05_scenario_g_holds_apparent_excess_comparable():
         b = next(x for x in reconcile('g', 5, readings) if x['boundary_asset_id'] == 'branch-03')
         magnitudes[scenario] = b['residual_kwh']
     present = [v for v in magnitudes.values() if v is not None]
-    assert len(present) >= 3
+    # Dev 1's validity gate withholds a residual for stale mapping as well as
+    # missing data. Only the complete and model-shift cases are interpretable.
+    assert len(present) == 2
     assert max(present) - min(present) < 0.5, magnitudes
     assert magnitudes['matched_residual_incomplete'] is None
+    assert magnitudes['matched_residual_stale_mapping'] is None
 
 
 def test_ac05_same_excess_different_evidence_gives_different_next_check():

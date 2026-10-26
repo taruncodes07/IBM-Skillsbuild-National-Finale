@@ -1,8 +1,10 @@
 # Capturing IBM Bob evidence
 
 AC-12 and Bob-A1 to Bob-A3 are worth 10 of the 25 marks — the same weight as the entire
-application demonstration. The repository currently holds **no** Bob evidence, so that
-category is at zero regardless of how well the app works.
+application demonstration. The merged repository includes Developer 1's supplied
+`BOB_EVIDENCE.md`, PDF and HTML reports. Their provenance was not independently
+verified during integration. The structured `bob-evidence/entries` ledger remains
+separate; importing reports does not automatically validate or populate that ledger.
 
 `scripts/bob_log.py` makes capturing it mechanical. It records what happened; it cannot
 invent anything, and it refuses to mark an entry presentable until a real prompt, a real

@@ -79,3 +79,117 @@ def month_summary(seed):
                          household_valid_kwh=household_sum))
     return dict(source=source.manifest, days=days,
                 aggregation_note='Feeder input and valid household energy are separate cuts; missing values are excluded, never imputed.')
+
+
+def ingest_readings_csv(csv_content_or_path):
+    """
+    Ingests and validates CSV readings per Shared Contract and PRD v5.0 Section 9:
+    Required columns: stream_id, timestamp, value, unit, quality
+    Optional columns: asset_id, source_file, source_row, is_synthetic
+
+    Preserves missing values as None, validates units, and detects duplicate readings.
+    """
+    import csv
+    import io
+    import math
+    from pathlib import Path
+
+    if isinstance(csv_content_or_path, Path):
+        text = csv_content_or_path.read_text(encoding='utf-8-sig')
+    else:
+        text = str(csv_content_or_path)
+        # CSV text may exceed Windows path limits or contain invalid path characters.
+        if '\n' not in text and '\r' not in text and ',' not in text:
+            text = Path(text).read_text(encoding='utf-8-sig')
+    text = text.lstrip('\ufeff')
+
+    reader = csv.DictReader(io.StringIO(text.strip()))
+    if not reader.fieldnames:
+        raise ValueError('Empty or invalid CSV: missing header row')
+
+    field_map = {fn.strip().lower(): fn for fn in reader.fieldnames}
+    stream_col = field_map.get('stream_id') or field_map.get('meter_id')
+    time_col = field_map.get('timestamp') or field_map.get('interval_start')
+    val_col = field_map.get('value') or field_map.get('energy_import_kwh') or field_map.get('energy_kwh')
+    unit_col = field_map.get('unit')
+    quality_col = field_map.get('quality')
+
+    if not stream_col or not time_col or not val_col:
+        raise ValueError(f"Missing required columns in CSV header. Found: {reader.fieldnames}")
+
+    records = []
+    seen_keys = set()
+    duplicates = []
+    errors = []
+
+    for row_idx, row in enumerate(reader, start=2):
+        stream_id = (row.get(stream_col) or '').strip()
+        timestamp = (row.get(time_col) or '').strip()
+        val_str = (row.get(val_col) or '').strip()
+        unit = (row.get(unit_col) or 'kwh').strip().lower() if unit_col else 'kwh'
+        quality = (row.get(quality_col) or 'valid').strip().lower() if quality_col else 'valid'
+
+        if not stream_id or not timestamp:
+            errors.append(f"Row {row_idx}: stream_id and timestamp must not be empty")
+            continue
+
+        try:
+            parsed_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            if parsed_time.tzinfo is None:
+                raise ValueError('Timestamp needs an explicit timezone')
+            normalized_time = parsed_time.astimezone(timezone.utc).isoformat()
+        except ValueError:
+            errors.append(f"Row {row_idx}: invalid or timezone-naive timestamp '{timestamp}'")
+            continue
+
+        # Duplicate detection within the observation stream
+        key = (stream_id, normalized_time)
+        duplicate = key in seen_keys
+        if key in seen_keys:
+            duplicates.append(dict(row=row_idx, stream_id=stream_id, timestamp=timestamp))
+        seen_keys.add(key)
+
+        # Unit verification
+        if unit not in ('kwh', 'wh'):
+            errors.append(f"Row {row_idx}: unsupported unit '{unit}', expected 'kWh' or 'Wh'")
+            continue
+
+        # Missing value preservation
+        if val_str.lower() in ('', 'null', 'none', 'nan', 'na'):
+            value = None
+            if quality == 'valid':
+                quality = 'missing'
+        else:
+            try:
+                raw_val = float(val_str)
+                if not math.isfinite(raw_val) or raw_val < 0:
+                    value = None
+                    quality = 'invalid'
+                else:
+                    value = raw_val * 0.001 if unit == 'wh' else raw_val
+            except ValueError:
+                value = None
+                quality = 'invalid'
+
+        if duplicate:
+            quality = 'duplicate'
+
+        records.append(dict(
+            stream_id=stream_id,
+            timestamp=timestamp,
+            value=value,
+            unit='kWh',
+            quality=quality,
+            source_row=row_idx,
+            is_synthetic=True
+        ))
+
+    return dict(
+        records=records,
+        total_rows=len(records),
+        valid_count=sum(1 for r in records if r['quality'] == 'valid' and r['value'] is not None),
+        missing_count=sum(1 for r in records if r['value'] is None),
+        duplicates_detected=duplicates,
+        validation_errors=errors,
+        unique_streams=sorted(list({r['stream_id'] for r in records}))
+    )

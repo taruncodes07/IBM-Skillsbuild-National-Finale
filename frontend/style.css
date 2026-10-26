@@ -83,3 +83,53 @@ h2{font-size:18px;letter-spacing:-.4px}h3{font-size:13px;letter-spacing:.1px}sma
 .coverage-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid #2b3a49;background:#121a22;font-size:.74rem;color:#9fb0c0}
 .coverage-chip.limited{border-color:#5a4a28;color:#f0b24a}
 .observability-note{margin:8px 0;padding:9px 11px;border-radius:8px;border-left:3px solid #f0b24a;background:#1a1710;font-size:.84rem;line-height:1.45}
+
+/* Ranked next checks (PRD FR-06 / AC-14) */
+.actions-panel{margin:18px 0;padding:14px;border:1px solid #24313e;border-radius:10px;background:#0f161d}
+.actions-panel>h3{margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.actions-panel>h3 .muted{font-size:.7rem;font-weight:400}
+.action-verdict{display:flex;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:12px;align-items:flex-start}
+.action-verdict strong{display:block;font-size:.9rem;margin-bottom:3px}
+.action-verdict p{margin:0;font-size:.8rem;line-height:1.45;color:#9fb0c0}
+.action-verdict.recommend{background:#10201a;border-left:3px solid #4ac08a}
+.action-verdict.recommend>svg{color:#4ac08a;flex:none;margin-top:2px}
+.action-verdict.abstain{background:#1a1710;border-left:3px solid #f0b24a}
+.action-verdict.abstain>svg{color:#f0b24a;flex:none;margin-top:2px}
+.action-verdict.blocked{background:#1b1419;border-left:3px solid #c76a7a}
+.action-verdict.blocked>svg{color:#c76a7a;flex:none;margin-top:2px}
+.action-tie{display:flex;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:12px;background:#141b26;border-left:3px solid #7f8cff;align-items:flex-start}
+.action-tie>svg{color:#7f8cff;flex:none;margin-top:2px}
+.action-tie strong{display:block;font-size:.85rem;margin-bottom:3px}
+.action-tie p{margin:0;font-size:.78rem;line-height:1.45;color:#9fb0c0}
+.action-card{margin:8px 0;padding:9px 10px;border-radius:8px;background:#121a22;border:1px solid transparent;transition:border-color .18s ease,background .18s ease}
+.action-card.leading{border-color:#2f4a3e;background:#121d19}
+.action-card:hover{border-color:#2b3a49}
+.action-head{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:inherit}
+.action-rank{flex:none;width:19px;height:19px;border-radius:50%;background:#1d2833;color:#9fb0c0;font-size:.7rem;display:flex;align-items:center;justify-content:center}
+.action-card.leading .action-rank{background:#2f4a3e;color:#8fe0b6}
+.action-name{flex:1;font-size:.86rem;line-height:1.3}
+.action-name em{color:#7d8d9c;font-style:normal;font-size:.74rem}
+.action-score{flex:none;font-variant-numeric:tabular-nums;font-size:.86rem;color:#8fe0b6}
+.action-score.negative{color:#c78a8a}
+.score-track{height:3px;border-radius:2px;background:#1d2833;margin:7px 0 6px;overflow:hidden}
+.score-track i{display:block;height:100%;background:#4ac08a;border-radius:2px;transition:width .35s ease}
+.score-track i.negative{background:#8a5a5a}
+.action-facts{display:flex;gap:12px;flex-wrap:wrap;font-size:.72rem;color:#8d9dac}
+.action-facts span{display:inline-flex;align-items:center;gap:4px}
+.action-detail{margin-top:9px;padding-top:9px;border-top:1px solid #1d2833}
+.action-question{margin:0 0 8px;font-size:.8rem;color:#b8c6d4;line-height:1.45}
+.action-detail dl{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:0;font-size:.74rem}
+.action-detail dt{color:#7d8d9c}
+.action-detail dd{margin:0;color:#b8c6d4}
+.action-detail code{font-size:.7rem;color:#9fb0c0;word-break:break-word}
+.rejected-actions{margin-top:10px;font-size:.78rem}
+.rejected-actions summary{cursor:pointer;color:#8d9dac;padding:4px 0}
+.rejected-row{display:flex;gap:8px;padding:6px 0;align-items:flex-start;border-top:1px solid #1a222b}
+.rejected-row>svg{color:#7d8d9c;flex:none;margin-top:3px}
+.rejected-row strong{display:block;font-size:.78rem;color:#9fb0c0;font-weight:500}
+.rejected-row small{color:#6f7f8e;font-size:.72rem;line-height:1.4}
+
+/* Live coverage switcher */
+.coverage-switch{display:flex;align-items:center;gap:7px;font-size:.74rem;color:#8d9dac;white-space:nowrap}
+.coverage-switch select{font-size:.76rem;padding:4px 7px;max-width:190px}
+.coverage-switch small{color:#6f7f8e;font-size:.66rem}

@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 data/*
 !data/.gitkeep
+!data/sample_readings.csv
 .pytest_cache/
 
 .test-tmp/

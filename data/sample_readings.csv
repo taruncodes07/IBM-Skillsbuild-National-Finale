@@ -1,0 +1,11 @@
+stream_id,timestamp,value,unit,quality
+meter-feeder-01,2026-10-24T08:00:00+05:30,22.450,kWh,valid
+meter-transformer-02,2026-10-24T08:00:00+05:30,22.120,kWh,valid
+meter-branch-03,2026-10-24T08:00:00+05:30,12.500,kWh,valid
+meter-branch-04,2026-10-24T08:00:00+05:30,9.500,kWh,valid
+meter-household-07,2026-10-24T08:00:00+05:30,3.500,kWh,valid
+meter-household-08,2026-10-24T08:00:00+05:30,3.500,kWh,valid
+meter-household-09,2026-10-24T08:00:00+05:30,3.500,kWh,valid
+meter-household-10,2026-10-24T08:00:00+05:30,3.100,kWh,valid
+meter-household-11,2026-10-24T08:00:00+05:30,3.100,kWh,valid
+meter-household-12,2026-10-24T08:00:00+05:30,3.100,kWh,valid

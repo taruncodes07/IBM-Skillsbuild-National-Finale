@@ -135,9 +135,13 @@ def seek(run,sequence):
 
 def snapshot(rid,seq=None):
     run=store.get(rid); interval=store.interval(rid,run.get('selected_seq',run['seq']) if seq is None else seq)
+    if interval is None:
+        raise ValueError(f'Interval not found for run {rid}')
     history=[]
     for i in range(max(0,interval['seq']-23),interval['seq']+1):
-        row=store.interval(rid,i); history.append(dict(seq=i,balances=row['balances']))
+        row=store.interval(rid,i)
+        if row is not None:
+            history.append(dict(seq=i,balances=row['balances']))
     public={k:v for k,v in run.items() if k not in ('scenario_settings','baseline','sigmas','streaks','meter_streaks')}
     return dict(run=public,assets=ASSETS,connections=CONNECTIONS,**interval,history=history,wall_time=store.now(),schema_version='1.0')
 

@@ -15,5 +15,6 @@ def load_environment():
         if '=' not in line:raise ValueError(f'Invalid .env entry at line {number}')
         key,value=line.split('=',1);key=key.strip();value=value.strip()
         if key not in ALLOWED:continue
-        if len(value)>=2 and value[0]==value[-1] and value[0] in ('"',"'"):value=value[1:-1]
+        if len(value)>=2 and value[0] in ('"',"'") and value[0]==value[-1]:value=value[1:-1]
+        elif len(value)==1 and value[0] in ('"',"'"):value=''
         if value:os.environ.setdefault(key,value)

@@ -2,7 +2,12 @@ from datetime import date
 
 
 def calculate(body):
-    if date.fromisoformat(body.period_start)>=date.fromisoformat(body.period_end):
+    try:
+        start=date.fromisoformat(body.period_start)
+        end=date.fromisoformat(body.period_end)
+    except ValueError as exc:
+        raise ValueError(f'Invalid date format: {exc}') from exc
+    if start>=end:
         raise ValueError('Period end must follow period start')
     if body.action_kind=='investigation_only' and (body.physical_saved_kwh or body.newly_billable_kwh):
         raise ValueError('Investigation alone has no recovery; select an explicit hypothetical intervention')

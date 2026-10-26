@@ -19,9 +19,9 @@ const pretty=(s:string)=>words(s).replace(/^./,c=>c.toUpperCase());
 const newKey=()=>crypto.randomUUID();
 
 function Chart({snapshot,aid}:{snapshot:Snapshot;aid:string}){
- const bs=snapshot.history.map(h=>h.balances.find(b=>b.boundary_asset_id===aid)).filter(Boolean);
- const top=Math.max(1,...bs.map(b=>b!.input_kwh||0))*1.15;
- const line=(field:'input_kwh'|'output_sum_kwh')=>bs.map((b,i)=>b![field]==null?'':`${i?'L':'M'} ${12+i*236/Math.max(bs.length-1,1)} ${95-(b![field]||0)/top*80}`).join(' ');
+ const bs=snapshot.history.map(h=>h.balances.find(b=>b.boundary_asset_id===aid)).filter((b):b is NonNullable<typeof b>=>b!=null);
+ const top=Math.max(1,...bs.map(b=>b.input_kwh||0))*1.15;
+ const line=(field:'input_kwh'|'output_sum_kwh')=>bs.map((b,i)=>b[field]==null?'':`${i?'L':'M'} ${12+i*236/Math.max(bs.length-1,1)} ${95-(b[field]||0)/top*80}`).join(' ');
  return <div className="history-chart"><svg viewBox="0 0 265 120" role="img" aria-label="Input and metered interval energy history in kWh">
   {[15,40,65,95].map(y=><line key={y} x1="12" x2="250" y1={y} y2={y} stroke="#24313e" strokeWidth=".6"/>)}
   {[12,60,108,156,204,250].map(x=><line key={x} y1="15" y2="95" x1={x} x2={x} stroke="#24313e" strokeWidth=".6"/>)}
@@ -67,7 +67,7 @@ function App(){
  useEffect(()=>{if(!initialized.current||!snapshot)return;const saved:Workspace={runId:snapshot.run.id,assetId:selected,sequence:screen==='inspection'&&detail?detail.case.analysis_sequence:snapshot.seq,screen,caseId:screen==='inspection'?selectedCase:null,actor,analysis:analysisContext?{area:analysisContext.area,sequence:analysisContext.snapshot.seq}:null};localStore.setItem(WORKSPACE_KEY,JSON.stringify(saved))},[snapshot?.run.id,snapshot?.seq,selected,screen,selectedCase,actor,analysisContext,detail?.case.id]);
  useEffect(()=>{
   if(!snapshot?.run.id)return;const rid=snapshot.run.id;let last=-1;const stream=new EventSource(`/api/runs/${rid}/events?after_seq=-1`);
-  stream.addEventListener('snapshot',(e)=>{const event=JSON.parse((e as MessageEvent).data);if(event.event_seq>last&&activeRun.current===rid){last=event.event_seq;setConnection('Live');loadRun(rid).catch(e=>setError(e.message));refreshCases().catch(()=>{})}});
+  stream.addEventListener('snapshot',(e)=>{const event=JSON.parse((e as MessageEvent).data);if(event.event_seq>last&&activeRun.current===rid){last=event.event_seq;setConnection('Live');loadRun(rid).catch(e=>setError((e as Error).message));refreshCases().catch(e=>console.error('[App] refreshCases error',e))}});
   stream.onopen=()=>setConnection('Live');stream.onerror=()=>setConnection('Reconnecting');return()=>stream.close();
  },[snapshot?.run.id,loadRun,refreshCases]);
  useEffect(()=>{if(analysisContext||!navigator&&!presenter&&!help&&!correction)return;

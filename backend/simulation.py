@@ -52,6 +52,8 @@ def generate(seed,seq,incidents):
             demand[a['id']]=(.45+(i*7%13)/12)*peak*.25*(.94+rng.random()*.12)
     for event in incidents:
         if event['start']<=seq<event['end']:
+            if event['target_asset_id'] not in CHILDREN:
+                continue  # skip incidents targeting assets not in the topology
             active.append(event)
             hs=CHILDREN[event['target_asset_id']]
             if event['type']=='legitimate_load_change': demand[hs[0]]*=event['severity']

@@ -92,7 +92,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
   fly(m){
    if(flight.current)return Promise.reject(new Error('A drone flight is already active.'));
    const initial=sampleFlight(m.waypoints_m,0);onFlightProgress?.(initial);setMission(m);setFlightActive(true);setRouteComplete(false);
-   const center=new THREE.Vector3();m.waypoints_m.forEach(p=>center.add(new THREE.Vector3(...p)));center.divideScalar(m.waypoints_m.length);
+   const center=new THREE.Vector3();m.waypoints_m.forEach(p=>center.add(new THREE.Vector3(...p)));if(m.waypoints_m.length>0)center.divideScalar(m.waypoints_m.length);
    camera.position.copy(center.clone().add(new THREE.Vector3(reduced?45:20,reduced?35:16,reduced?52:26)));controls.current?.target.copy(center);controls.current?.update();
    return new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{if(flight.current){flight.current=null;setFlightActive(false);reject(new Error('The flight view stopped updating. Keep the tab visible and retry the inspection.'))}},30000);flight.current={start:performance.now(),resolve,reject,mission:m,timer,lastUpdate:0}})
   },

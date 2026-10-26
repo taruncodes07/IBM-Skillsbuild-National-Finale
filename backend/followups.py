@@ -39,8 +39,9 @@ def signature(action,area_id,inv):
 
 
 def _electrical(area_id,inv):
-    balances=[next(b for b in f['balances'] if b['boundary_asset_id']==area_id)
+    balances=[next((b for b in f['balances'] if b['boundary_asset_id']==area_id),None)
               for f in inv['followup_inputs']['window']]
+    balances=[b for b in balances if b is not None]
     valid=[b for b in balances if b['validity']=='valid' and b['residual_kwh'] is not None]
     streak=0
     for b in reversed(balances):
@@ -76,7 +77,8 @@ def _topology(area_id,inv):
 
 def _localization(area_id,inv):
     # W4's admissible measured regions constrain geometry; no renderer truth is used.
-    regions=[sid for sid in inv['workers'][3]['findings']['candidate_area_ids']
+    w4_findings=inv['workers'][3]['findings'] if len(inv.get('workers',[]))>3 else {}
+    regions=[sid for sid in w4_findings.get('candidate_area_ids',[])
              if sid==area_id or is_descendant(sid,area_id)]
     if not regions:
         return ('INSUFFICIENT_DATA',dict(localization_level='NONE',candidate_regions=[],

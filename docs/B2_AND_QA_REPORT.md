@@ -1,5 +1,41 @@
 # Full adaptive evaluation and product QA
 
+## Current B2 regression rerun — 26 October 2026
+
+Reran the unchanged full-workflow evaluator against merged main commit `1dd59d3`.
+The current results are in `adaptive-results.json`; the original report is preserved
+as `adaptive-results-2026-10-25.json`. The sections below describe the historical run.
+
+- Granite (`ibm/granite-4-h-small`): 18/18 completed and matched the declared rubric;
+  zero provider failures, policy rejections or skipped cases. Six cases executed eight
+  local checks; two replanning rounds cited derived-check evidence. Total case time:
+  109.344 seconds. Provider-reported usage: 60,745 prompt and 5,970 completion tokens.
+- Rules: 18/18 completed and matched the rubric, with zero automatic checks or provider
+  calls; total case time 1.603 seconds.
+- Both arms passed the bounded/unique-check, chronological evidence-reference and
+  normal/nonpersistent-signal checks. Granite was pinned with fallback disabled.
+  Operator cases and evidence were untouched; evaluation used disposable storage.
+
+The original seed, case-generation protocol and scoring rubric were retained. These
+are previously evaluated synthetic realizations rerun for regression validation,
+not newly unseen cases. The old Granite score was 15/18; the new 18/18 result is one
+stochastic rerun on changed code, not evidence of a causal improvement or superiority
+over rules. The rubric permits immediate human handoff and does not measure the
+information value of a check, real-world accuracy or cause identification.
+
+This B2 suite exercises the persisted investigation graph at full metering coverage.
+It does not exercise every new coverage profile, the separate next-check ranking API,
+ground observations or drone flights. Those features have separate deterministic and
+integration tests. Gemini and external deployment remain deferred.
+
+Report-freshness regression tests: 2 passed. No runtime/evaluator source was changed
+for this rerun. The historical first-action pilot remains stale by design.
+The separate free B0/B1 detection diagnostics were also refreshed at the same code
+fingerprint: each matched 16/20 eligible events, with zero false alerts over six
+valid control branch-hours. Their detection rubric is separate from B2.
+
+## Historical run and QA
+
 25 October 2026. Local changes on `grid-trace-prototype`; no commit or push for this increment.
 
 ## Full B2 workflow

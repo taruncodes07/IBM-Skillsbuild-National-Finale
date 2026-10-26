@@ -209,7 +209,7 @@ def expected_loss(kind, output):
 def balance_terms(input_kwh,output_kwh,authorized_kwh,loss_kwh):
     if input_kwh is None or output_kwh is None or loss_kwh is None: return None,None
     residual=input_kwh-output_kwh-authorized_kwh-loss_kwh
-    return residual,residual/max(input_kwh,1e-6)
+    return residual,residual/max(abs(input_kwh),1e-6)
 
 def reconcile(run_id, seq, readings, sigmas=None, installed=None, coverage_mode='full'):
     """Reconcile the installed cut; legacy coverage modes remain supported.

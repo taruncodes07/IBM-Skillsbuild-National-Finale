@@ -181,6 +181,8 @@ def information_gain(prior, likelihoods, outcomes):
     prior: {cause: probability}; likelihoods: {cause: (P(o|cause), ...)} aligned to outcomes.
     """
     causes = [c for c in prior if prior[c] > 0]
+    if not causes:
+        return 0.0
     before = entropy([prior[c] for c in causes])
     after = 0.0
     for index in range(len(outcomes)):

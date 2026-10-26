@@ -22,8 +22,16 @@ def put(kind,obj,commit=True):
     return obj
 def get(id):
     r=DB.execute('SELECT body FROM objects WHERE id=?',(id,)).fetchone()
-    return json.loads(r[0]) if r else None
-def all_of(kind): return [json.loads(r[0]) for r in DB.execute('SELECT body FROM objects WHERE kind=? ORDER BY rowid DESC',(kind,))]
+    if not r: return None
+    try: return json.loads(r[0])
+    except json.JSONDecodeError as exc: raise RuntimeError(f'Corrupt JSON in store for id={id}') from exc
+def all_of(kind):
+    rows=DB.execute('SELECT body FROM objects WHERE kind=? ORDER BY rowid DESC',(kind,))
+    result=[]
+    for (body,) in rows:
+        try: result.append(json.loads(body))
+        except json.JSONDecodeError: continue
+    return result
 def interval(run_id,seq):
     r=DB.execute('SELECT body FROM intervals WHERE run_id=? AND seq=?',(run_id,seq)).fetchone()
     return json.loads(r[0]) if r else None

@@ -37,7 +37,8 @@ async def clock_loop():
         for run in store.all_of('run'):
             if not run['playing']: elapsed[run['id']]=0; continue
             elapsed[run['id']]=elapsed.get(run['id'],0)+delta
-            period=15/run['speed']
+            speed=run.get('speed') or 10
+            period=15/speed
             while elapsed[run['id']]>=period and run['playing']:
                 engine.step(run); elapsed[run['id']]-=period
 
@@ -417,7 +418,9 @@ async def mission(cid:str,body:MissionInput,x_actor:str=Header(default='analyst'
         raise HTTPException(409,'The ground view was clear; an aerial viewpoint cannot add the missing observation')
     if any(m['case_id']==cid and m['status'] not in ('completed','failed','cancelled') for m in store.all_of('mission')): raise HTTPException(409,'A mission is already active')
     r=require(c['run_id'],'run'); r['playing']=False; r['event_seq']+=1; store.put('run',r)
-    x,_,z=BY_ID[c['boundary_asset_id']]['position_m']
+    pos=BY_ID.get(c['boundary_asset_id'],{}).get('position_m',[])
+    if len(pos)<3: raise HTTPException(500,'Boundary asset position is missing or incomplete')
+    x,_,z=pos[0],pos[1],pos[2]
     m=dict(id=store.uid('mission'),case_id=cid,run_id=c['run_id'],target_asset_ids=[c['boundary_asset_id'],'pole-'+c['boundary_asset_id']],status='approved',approved_by=x_actor,approved_at=store.now(),waypoints_m=[[x+20,12,z+26],[x-20,12,z+26],[x+10,14,z+30]],created_at=store.now(),capture_sequence=c['analysis_sequence'],failure_reason=None,provenance='synthetic',idempotency_key=body.idempotency_key,frame_keys={},
            ground_observation_id=question['id'],answering_question=question['outstanding_question'],
            ground_visibility=question['visibility'],
@@ -458,6 +461,7 @@ async def frame(mid:str,body:FrameInput,x_actor:str=Header(default='analyst')):
     began=time.perf_counter()
     try: result,output=inspection.detect(image,pose,c['boundary_asset_id']); cv2.imwrite(str(store.ROOT/'evidence'/annotated),output)
     except Exception as exc:
+        import traceback; logging.error('inspection.detect failed for %s: %s',mid,traceback.format_exc())
         failed=dict(id=eid,case_id=c['id'],mission_id=mid,run_id=m['run_id'],captured_sim_time=stamp(m['capture_sequence']+1),captured_wall_time=store.now(),original_image_path='/evidence/'+original,original_sha256=hashlib.sha256(raw).hexdigest(),annotated_image_path=None,annotated_sha256=None,camera_pose=pose,image_width=640,image_height=480,approved_geometry_version=body.approved_geometry_version,capture_sequence=body.capture_sequence,capture_source=body.capture_source,analysis_revision=store.interval(m['run_id'],m['capture_sequence']).get('analysis_revision',1),processing_ms=(time.perf_counter()-began)*1000,detector_version=inspection.VERSION,parameters=inspection.PARAMETERS,observation_status='inconclusive',observations=[],processing_error=str(exc),limitations=['Processing failed; no visual inference was produced. Retry or continue without visual evidence.']+inspection.LIMITS,provenance='synthetic')
         store.put('evidence',failed);c['evidence_ids'].append(eid)
         m.update(status='failed',failure_reason='Image processing failed; original and capture metadata retained. Retry capture or continue without visual evidence.'); store.put('mission',m); bump(c,x_actor,'processing_failed',str(exc),refs=[eid]); raise HTTPException(500,m['failure_reason'])
@@ -476,7 +480,8 @@ async def export(cid:str,format:Literal['json','md']='json'):
     report['analysis']={k:v for k,v in analysis.items() if not k.startswith('physical_')}
     if format=='json': content=json.dumps(report,indent=2,allow_nan=False); media='application/json'
     else:
-        bal=next(b for b in analysis['balances'] if b['boundary_asset_id']==c['boundary_asset_id'])
+        bal=next((b for b in analysis['balances'] if b['boundary_asset_id']==c['boundary_asset_id']),None)
+        if bal is None: raise HTTPException(404,'Balance for case boundary not found in frozen analysis')
         content=f"# Grid Trace case {cid}\n\n{report['disclosure']}\n\nBoundary: {c['boundary_asset_id']} · Run: {c['run_id']} · Seed: {run['seed']}\n\nState: {c['state']} · Owner: {c['assigned_to'] or 'Unassigned'}\n\nDisposition: {c['disposition']}\n\nReason: {c['decision_reason']}\n\n## Frozen interval balance\n\n```json\n{json.dumps(bal,indent=2)}\n```\n\n## Evidence (separate PNG files)\n"
         for e in detail['evidence']: content+=f"\n- {e['id']}: {e['observation_status']} · {e['original_image_path']} · SHA-256 `{e['original_sha256']}` · annotated: {e['annotated_image_path']} · SHA-256 `{e['annotated_sha256']}` · {e['detector_version']} · pose {json.dumps(e['camera_pose'])}\n"
         content+='\n## Contributing observed intervals\n\n```json\n'+json.dumps(contributing,indent=2)+'\n```\n\n## Audit history\n'

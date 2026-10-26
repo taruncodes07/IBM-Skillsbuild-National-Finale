@@ -7,16 +7,16 @@ from fastapi.responses import StreamingResponse,Response,FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,Field,ConfigDict
 from typing import Literal
-from . import store,engine,inspection
+from . import store,engine,inspection,coverage,ranking
 from .simulation import SCENARIOS,stamp
-from .topology import BY_ID,VERSION
+from .topology import BY_ID,VERSION,ASSETS
 from .sources import manifest, month_summary, MONTH_INTERVALS
 from . import investigations, providers, finance, benchmark
 from .contracts import InvestigationInput, FinanceInput
 
 logging.basicConfig(level=logging.INFO)
 ROLES=['analyst','reviewer','supervisor','presenter']
-TRANSITIONS={'open':['triaged'],'triaged':['inspection_requested','under_review'],'inspection_requested':['evidence_ready','under_review'],'evidence_ready':['under_review'],'under_review':['field_check_required','resolved','dismissed'],'field_check_required':['under_review'],'resolved':['reopened'],'dismissed':['reopened'],'reopened':['triaged']}
+TRANSITIONS={'open':['triaged'],'triaged':['ground_review','under_review'],'ground_review':['inspection_requested','under_review'],'inspection_requested':['evidence_ready','under_review'],'evidence_ready':['under_review'],'under_review':['field_check_required','resolved','dismissed'],'field_check_required':['under_review'],'resolved':['reopened'],'dismissed':['reopened'],'reopened':['triaged']}
 DISPOSITIONS=['data-quality issue','authorized load','technical-loss/model issue','meter fault','suspected unmetered consumption requiring field verification','inconclusive']
 
 def require(id,kind=None):
@@ -62,6 +62,20 @@ class RunInput(BaseModel):
     seed:int=Field(default=42,ge=0,le=1000000)
     scenario:Literal[tuple(SCENARIOS)]='clean'
     mode:Literal['laboratory','replay']='laboratory'
+    coverage_profile:Literal[tuple(coverage.PROFILES)]=coverage.DEFAULT_PROFILE
+class CoverageInput(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    profile_id:Literal[tuple(coverage.PROFILES)]
+class GroundObservation(BaseModel):
+    """PRD FR-07. A reviewer records what ground access actually produced."""
+    model_config=ConfigDict(extra='forbid')
+    idempotency_key:str=Field(min_length=1,max_length=100)
+    access:Literal['obtained','refused','unsafe','not_attempted']
+    observed_asset_ids:list[str]=Field(default_factory=list,max_length=40)
+    visibility:Literal['clear','partial','obstructed','not_visible']
+    resolved_from_ground:bool=False
+    outstanding_question:str=Field(default='',max_length=600)
+    notes:str=Field(default='',max_length=4000)
 class Control(BaseModel):
     command:Literal['play','pause','step','speed','seek']
     speed:Literal[1,10,60]=10
@@ -168,7 +182,7 @@ async def create_run(body:RunInput):
         raise HTTPException(400,'Replay is read-only; use the laboratory for injected scenarios')
     for r in store.all_of('run'):
         if r['playing']: r['playing']=False; store.put('run',r)
-    return engine.snapshot(engine.create_run(body.seed,body.scenario,body.mode)['id'])
+    return engine.snapshot(engine.create_run(body.seed,body.scenario,body.mode,body.coverage_profile)['id'])
 @app.get('/api/runs/{rid}/snapshot')
 async def snapshot(rid:str,seq:int|None=None):
     r=require(rid,'run')
@@ -240,6 +254,72 @@ async def revise_reading(rid:str,body:ReadingRevision,x_actor:str=Header(default
 @app.get('/api/runs/{rid}/analysis-revisions')
 async def analysis_revisions(rid:str):
     require(rid,'run');return dict(recomputations=[r for r in store.all_of('recomputation') if r['run_id']==rid],revisions=[r for r in store.all_of('analysis-revision') if r['id'].startswith(rid)])
+@app.get('/api/coverage/profiles')
+async def coverage_profiles():
+    return dict(profiles=coverage.describe_profiles(),default=coverage.DEFAULT_PROFILE,
+                disclosure=('Published metering counts parameterise a fictional network; they do '
+                            'not establish communication health, mapping correctness, or that '
+                            'GridTrace was tested on any utility.'))
+
+@app.get('/api/runs/{rid}/coverage')
+async def get_coverage(rid:str):
+    run=require(rid,'run')
+    return coverage.summary(run.get('coverage_profile',coverage.DEFAULT_PROFILE),ASSETS)
+
+@app.post('/api/runs/{rid}/coverage')
+async def set_coverage(rid:str,body:CoverageInput,x_actor:str=Header(default='analyst')):
+    """Changing installed inventory is a presenter control; it resets persistence streaks."""
+    role(x_actor,['presenter'])
+    run=require(rid,'run')
+    if any(m['run_id']==rid and m['status'] not in ('completed','failed','cancelled') for m in store.all_of('mission')):
+        raise HTTPException(409,'Finish or cancel the active mission before changing coverage')
+    engine.set_coverage(run,body.profile_id)
+    return coverage.summary(body.profile_id,ASSETS)
+
+@app.get('/api/balances/{bid}/actions')
+async def balance_actions(bid:str,run_id:str,case_id:str|None=None):
+    """Ranked next checks for one boundary balance (PRD FR-06, AC-14)."""
+    run=require(run_id,'run')
+    interval=store.interval(run_id,run.get('selected_seq',run['seq']))
+    if interval is None: raise HTTPException(404,'No analysed interval for this run')
+    balance=next((b for b in interval['balances'] if b['id']==bid or b['boundary_asset_id']==bid),None)
+    if balance is None: raise HTTPException(404,'Unknown balance for this run and interval')
+    validity=balance['validity']
+    if validity=='insufficient_observability':
+        status='INSUFFICIENT_OBSERVABILITY'
+    elif validity!='valid':
+        status='DATA_INCOMPLETE'
+    elif balance['negative_review']:
+        status='REVIEW_MODEL_OR_TOPOLOGY'
+    elif any(a['boundary_asset_id']==balance['boundary_asset_id'] and a['status']=='active' for a in interval['alerts']):
+        status='UNEXPLAINED_ENERGY'
+    elif balance['qualifies']:
+        status='PERSISTENCE_PENDING'
+    else:
+        status='WITHIN_MODEL_RANGE'
+    reasons=' '.join(balance['invalid_reasons']).lower()
+    kind=('BOTH' if 'topology mismatch' in reasons and ('missing' in reasons or 'invalid energy' in reasons)
+          else 'TOPOLOGY_MISMATCH' if 'topology mismatch' in reasons
+          else 'MISSING_READINGS')
+    if status=='INSUFFICIENT_OBSERVABILITY':
+        return dict(balance_id=balance['id'],boundary_asset_id=balance['boundary_asset_id'],
+                    diagnostic_status=status,policy_version=ranking.POLICY_VERSION,
+                    ranked=[],rejected=[],recommended_action='ABSTAIN_NO_ACTION',
+                    abstain_reason=('This boundary is not instrumented under the active coverage '
+                                    'profile. No reconciled residual exists to investigate.'),
+                    missing_evidence_question='Which sectional measurement would make this boundary reconcilable?',
+                    uninstrumented_asset_ids=balance.get('uninstrumented_asset_ids',[]),
+                    inventory_version=run.get('inventory_version'),
+                    coverage_profile=run.get('coverage_profile',coverage.DEFAULT_PROFILE))
+    context=dict(diagnostic_status=status,incomplete_kind=kind,billing_status='NOT_AVAILABLE',
+                 ground_question_open=bool(case_id and open_ground_question(case_id)),
+                 completed_actions=tuple(), area_id=balance['boundary_asset_id'], balance_id=balance['id'])
+    result=ranking.rank(context)
+    result.update(balance_id=balance['id'],boundary_asset_id=balance['boundary_asset_id'],
+                  diagnostic_status=status,inventory_version=run.get('inventory_version'),
+                  coverage_profile=run.get('coverage_profile',coverage.DEFAULT_PROFILE))
+    return result
+
 @app.get('/api/cases')
 async def cases(): return store.all_of('case')
 @app.post('/api/cases')
@@ -262,7 +342,7 @@ async def create_case(body:NewCase,x_actor:str=Header(default='analyst')):
     store.put('case',c); store.audit(c,x_actor,'created',None,refs=alert['balance_ids']); return c
 @app.get('/api/cases/{cid}')
 async def case_detail(cid:str):
-    c=require(cid,'case'); return dict(case=c,audit=store.audits(cid),missions=[m for m in store.all_of('mission') if m['case_id']==cid],evidence=[e for e in store.all_of('evidence') if e['case_id']==cid],transitions=TRANSITIONS[c['state']])
+    c=require(cid,'case'); return dict(case=c,audit=store.audits(cid),missions=[m for m in store.all_of('mission') if m['case_id']==cid],evidence=[e for e in store.all_of('evidence') if e['case_id']==cid],ground=ground_observations(cid),open_ground_question=open_ground_question(cid),transitions=TRANSITIONS[c['state']])
 @app.patch('/api/cases/{cid}')
 async def update_case(cid:str,body:CasePatch,x_actor:str=Header(default='analyst')):
     c=require(cid,'case')
@@ -283,20 +363,68 @@ async def update_case(cid:str,body:CasePatch,x_actor:str=Header(default='analyst
     if body.note: role(x_actor,['reviewer','supervisor','analyst'])
     bump(c,x_actor,'transition' if body.state else ('note' if body.note else 'assignment'),body.note or body.reason,new_state=body.state)
     return c
+def ground_observations(cid):
+    return sorted((g for g in store.all_of('ground') if g['case_id']==cid),key=lambda g:g['recorded_at'])
+
+def open_ground_question(cid):
+    """The most recent ground observation that leaves an overhead question unanswered."""
+    for g in reversed(ground_observations(cid)):
+        if g['resolved_from_ground']: return None
+        if g['outstanding_question'].strip(): return g
+    return None
+
+@app.get('/api/cases/{cid}/ground-observations')
+async def list_ground(cid:str):
+    require(cid,'case')
+    return dict(observations=ground_observations(cid),open_question=open_ground_question(cid))
+
+@app.post('/api/cases/{cid}/ground-observations')
+async def add_ground(cid:str,body:GroundObservation,x_actor:str=Header(default='analyst')):
+    """PRD FR-07: ground-first. Aerial review is justified only by a recorded, unanswered question."""
+    role(x_actor,['reviewer','supervisor']); c=require(cid,'case')
+    for g in store.all_of('ground'):
+        if g['case_id']==cid and g['idempotency_key']==body.idempotency_key: return g
+    if c['state'] in ('resolved','dismissed'): raise HTTPException(409,'Reopen the case before adding observations')
+    if body.resolved_from_ground and body.outstanding_question.strip():
+        raise HTTPException(400,'A ground-resolved observation cannot also carry an outstanding question')
+    if not body.resolved_from_ground and not body.outstanding_question.strip():
+        raise HTTPException(400,'Record the exact question the ground view could not answer, or mark it resolved from ground')
+    if body.access!='obtained' and body.resolved_from_ground:
+        raise HTTPException(400,'An observation without obtained access cannot resolve the question')
+    unknown=[a for a in body.observed_asset_ids if a not in BY_ID]
+    if unknown: raise HTTPException(400,f'Unknown asset ids: {", ".join(unknown[:5])}')
+    g=dict(id=store.uid('ground'),case_id=cid,run_id=c['run_id'],recorded_by=x_actor,recorded_at=store.now(),
+           access=body.access,observed_asset_ids=body.observed_asset_ids,visibility=body.visibility,
+           resolved_from_ground=body.resolved_from_ground,outstanding_question=body.outstanding_question.strip(),
+           notes=body.notes.strip(),idempotency_key=body.idempotency_key,provenance='synthetic',
+           limitation='A ground observation records what a person reported seeing. It does not establish authorization, energization or intent.')
+    store.put('ground',g)
+    bump(c,x_actor,'ground_observation',body.notes.strip() or body.outstanding_question.strip(),refs=[g['id']],
+         new_state='ground_review' if c['state']=='triaged' else None)
+    return g
+
 @app.post('/api/cases/{cid}/missions')
 async def mission(cid:str,body:MissionInput,x_actor:str=Header(default='analyst')):
     role(x_actor,['reviewer','supervisor']); c=require(cid,'case')
     for m in store.all_of('mission'):
         if m['case_id']==cid and m['idempotency_key']==body.idempotency_key: return m
     if not body.approved: raise HTTPException(400,'Explicit reviewer approval is required')
-    if c['state'] not in ('triaged','inspection_requested','evidence_ready','under_review'): raise HTTPException(409,'Triage the case before approving inspection')
+    if c['state'] not in ('ground_review','inspection_requested','evidence_ready','under_review'): raise HTTPException(409,'Record a ground observation before approving aerial inspection')
+    question=open_ground_question(cid)
+    if question is None:
+        raise HTTPException(409,'Aerial review requires a recorded ground observation that leaves a specific overhead question unanswered')
+    if question['visibility']=='clear':
+        raise HTTPException(409,'The ground view was clear; an aerial viewpoint cannot add the missing observation')
     if any(m['case_id']==cid and m['status'] not in ('completed','failed','cancelled') for m in store.all_of('mission')): raise HTTPException(409,'A mission is already active')
     r=require(c['run_id'],'run'); r['playing']=False; r['event_seq']+=1; store.put('run',r)
     x,_,z=BY_ID[c['boundary_asset_id']]['position_m']
-    m=dict(id=store.uid('mission'),case_id=cid,run_id=c['run_id'],target_asset_ids=[c['boundary_asset_id'],'pole-'+c['boundary_asset_id']],status='approved',approved_by=x_actor,approved_at=store.now(),waypoints_m=[[x+20,12,z+26],[x-20,12,z+26],[x+10,14,z+30]],created_at=store.now(),capture_sequence=c['analysis_sequence'],failure_reason=None,provenance='synthetic',idempotency_key=body.idempotency_key,frame_keys={})
+    m=dict(id=store.uid('mission'),case_id=cid,run_id=c['run_id'],target_asset_ids=[c['boundary_asset_id'],'pole-'+c['boundary_asset_id']],status='approved',approved_by=x_actor,approved_at=store.now(),waypoints_m=[[x+20,12,z+26],[x-20,12,z+26],[x+10,14,z+30]],created_at=store.now(),capture_sequence=c['analysis_sequence'],failure_reason=None,provenance='synthetic',idempotency_key=body.idempotency_key,frame_keys={},
+           ground_observation_id=question['id'],answering_question=question['outstanding_question'],
+           ground_visibility=question['visibility'],
+           limitation='Imagery can only answer the recorded overhead question. It cannot establish authorization, energization or cause.')
     frozen=store.interval(r['id'],m['capture_sequence'])
     store.put('capture-analysis',dict(id=m['id']+'-snapshot',observations={k:v for k,v in frozen.items() if not k.startswith('physical_')}))
-    store.put('mission',m); bump(c,x_actor,'mission_approved',refs=[m['id']],new_state='inspection_requested' if c['state']=='triaged' else None); return m
+    store.put('mission',m); bump(c,x_actor,'mission_approved',question['outstanding_question'],refs=[m['id'],question['id']],new_state='inspection_requested' if c['state']=='ground_review' else None); return m
 @app.get('/api/missions/{mid}')
 async def get_mission(mid:str): return require(mid,'mission')
 @app.patch('/api/missions/{mid}')

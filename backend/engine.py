@@ -1,28 +1,57 @@
 import statistics,time,logging
-from . import store
-from .simulation import generate,stamp
+from . import store, coverage
+from .simulation import generate,stamp,matched_residual_incidents,MATCHED_RESIDUAL
 from .analytics import reconcile,detect,RULE_VERSION
 from .topology import ASSETS,CONNECTIONS,VERSION,CHILDREN
 from .sources import DevelopmentMonthSource, MONTH_INTERVALS
 
-def create_run(seed=42,scenario='clean',mode='laboratory'):
+def installed_for(run):
+    """None for a fully instrumented network, otherwise the profile's installed meters."""
+    profile=run.get('coverage_profile',coverage.DEFAULT_PROFILE)
+    if profile==coverage.DEFAULT_PROFILE: return None
+    return coverage.installed_meters(profile,ASSETS)
+
+def create_run(seed=42,scenario='clean',mode='laboratory',coverage_profile=coverage.DEFAULT_PROFILE):
     if mode == 'replay' and scenario != 'clean':
         raise ValueError('Replay does not permit incident injection')
+    if coverage_profile not in coverage.PROFILES:
+        raise ValueError('Unknown coverage profile')
     rid=store.uid('run'); baseline={a['id']:[[] for _ in range(96)] for a in ASSETS if a['kind']=='household'}; residuals={}
+    installed=None if coverage_profile==coverage.DEFAULT_PROFILE else coverage.installed_meters(coverage_profile,ASSETS)
     # Seven clean days per independently seeded run, not copied from scenario truth.
     for seq in range(-672,0):
         obs=generate(seed,seq,[])['readings']
         for hid,slots in baseline.items(): slots[seq%96].append(obs[hid]['energy_import_kwh'])
-        for b in reconcile(rid,seq,obs): residuals.setdefault(b['boundary_asset_id'],[]).append(b['residual_kwh'])
-    sigma={k:max(.015,statistics.stdev(v)) for k,v in residuals.items()}
+        for b in reconcile(rid,seq,obs,None,installed):
+            if b['residual_kwh'] is not None: residuals.setdefault(b['boundary_asset_id'],[]).append(b['residual_kwh'])
+    sigma={k:max(.015,statistics.stdev(v)) for k,v in residuals.items() if len(v)>1}
     means={k:[statistics.mean(slot) for slot in slots] for k,slots in baseline.items()}
-    inc=[] if scenario=='clean' else [dict(type=scenario,target_asset_id='branch-03',start=1,end=80,severity=.85 if scenario=='meter_underregistration' else 1.2)]
+    if scenario=='clean': inc=[]
+    elif scenario in MATCHED_RESIDUAL: inc=matched_residual_incidents(scenario)
+    else: inc=[dict(type=scenario,target_asset_id='branch-03',start=1,end=80,severity=.85 if scenario=='meter_underregistration' else 1.2)]
     run=dict(id=rid,seed=seed,seq=-1,event_seq=0,playing=False,speed=10,scenario_settings=inc,topology_version=VERSION,rule_version=RULE_VERSION,created_at=store.now(),baseline=means,sigmas=sigma,streaks={},meter_streaks={},provenance='synthetic')
     run.update(mode=mode, interval_count=MONTH_INTERVALS if mode=='replay' else 96,
-               selected_seq=-1, revision=1,
+               selected_seq=-1, revision=1, scenario=scenario,
+               coverage_profile=coverage_profile,
+               inventory_version=coverage.inventory_version(coverage_profile),
                source=DevelopmentMonthSource(seed).manifest if mode=='replay' else
                dict(source_kind='SYNTHETIC_CHALLENGE', label='Development scenario laboratory', official_source_status='PENDING'))
     store.put('run',run); step(run); return store.get(rid)
+
+
+def set_coverage(run,profile_id):
+    """Changing installed inventory creates a new inventory version and clears persistence.
+
+    Streaks earned under a different instrumented cut cannot carry over (PRD AC-13).
+    """
+    if profile_id not in coverage.PROFILES: raise ValueError('Unknown coverage profile')
+    run['coverage_profile']=profile_id
+    run['inventory_version']=coverage.inventory_version(profile_id)
+    run['streaks']={}; run['meter_streaks']={}
+    run['event_seq']=run.get('event_seq',0)+1
+    run['revision']=run.get('revision',0)+1
+    store.put('run',run)
+    return run
 
 def step(run,commit=True):
     if run.get('selected_seq',run['seq']) < run['seq']:
@@ -39,7 +68,7 @@ def step(run,commit=True):
                else generate(run['seed'],seq,run['scenario_settings']))
     obs=generated['readings']
     for r in obs.values(): r['run_id']=run['id']
-    balances=reconcile(run['id'],seq,obs,run['sigmas']); previous=store.interval(run['id'],seq-1)
+    balances=reconcile(run['id'],seq,obs,run['sigmas'],installed_for(run)); previous=store.interval(run['id'],seq-1)
     alerts,quality,streaks=detect(run['id'],seq,balances,obs,previous['alerts'] if previous else [],run['streaks'],run['baseline'])
     for hid in run['baseline']:
         r=obs[hid]; low=r['quality']=='valid' and r['energy_import_kwh'] is not None and run['baseline'][hid][seq%96]>=.15 and r['energy_import_kwh']<.5*run['baseline'][hid][seq%96]
@@ -91,7 +120,7 @@ def revise_reading(run,seq,asset_id,value,quality,actor):
         store.put('analysis-revision',archived)
         if i==seq:
             r=observed['readings'][asset_id];r['energy_import_kwh']=value;r['quality']=quality;r['revision']+=1;r['received_at']=store.now()
-        balances=reconcile(run['id'],i,observed['readings'],run['sigmas'])
+        balances=reconcile(run['id'],i,observed['readings'],run['sigmas'],installed_for(run))
         for b in balances:b['id']+=f'-r{revision}';b['analysis_revision']=revision
         alerts,quality_events,streaks=detect(run['id'],i,balances,observed['readings'],previous,streaks,run['baseline'])
         for hid in run['baseline']:

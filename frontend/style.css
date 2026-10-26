@@ -62,3 +62,24 @@ h2{font-size:18px;letter-spacing:-.4px}h3{font-size:13px;letter-spacing:.1px}sma
 @media(max-width:650px){.capture-view-controls{top:8px;left:8px}.capture-view-controls button{min-height:34px;font-size:9px;padding:5px 8px}.inspection .image-pair figcaption{display:none}}
 .successbar{top:auto;bottom:108px;left:auto;right:20px;transform:none;max-width:430px;font-size:12px;background:#123b36;border-color:#427e6b;box-shadow:0 8px 25px #0005}
 @media(max-width:650px){.successbar{bottom:108px;left:55px;right:10px;width:auto;max-width:none;font-size:10px;padding:10px;gap:8px}.successbar button{flex-shrink:0}}
+
+/* Ground review (PRD FR-07): aerial inspection is justified, not assumed. */
+.ground-review{margin:18px 0;padding:14px;border:1px solid #24313e;border-radius:10px;background:#0f161d}
+.ground-review h3{margin:0 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ground-entry{margin:8px 0;padding:9px 11px;border-radius:8px;border-left:3px solid #3a4a5a;background:#121a22}
+.ground-entry.open{border-left-color:#f0b24a}
+.ground-entry.resolved{border-left-color:#57dce8}
+.ground-entry strong{display:block;font-size:.78rem;letter-spacing:.02em;text-transform:uppercase;color:#9fb0c0}
+.ground-entry p{margin:4px 0 5px;font-size:.88rem;line-height:1.45}
+.ground-entry small{color:#7d8d9c;font-size:.74rem}
+.ground-form{margin-top:10px;display:flex;flex-direction:column;gap:9px}
+.ground-form textarea{resize:vertical;min-height:52px}
+.ground-check{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:.85rem}
+.ground-check input{width:auto;margin:0}
+.ground-actions{display:flex;gap:10px;align-items:center;margin-top:2px}
+.ground-actions .primary{flex:1}
+
+/* Coverage disclosure (PRD AC-13) */
+.coverage-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid #2b3a49;background:#121a22;font-size:.74rem;color:#9fb0c0}
+.coverage-chip.limited{border-color:#5a4a28;color:#f0b24a}
+.observability-note{margin:8px 0;padding:9px 11px;border-radius:8px;border-left:3px solid #f0b24a;background:#1a1710;font-size:.84rem;line-height:1.45}

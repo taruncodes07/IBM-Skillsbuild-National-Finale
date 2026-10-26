@@ -1,5 +1,6 @@
 """Observed inputs only. This module must never import the simulator or truth store."""
 import math
+from . import coverage
 from .topology import BY_ID, CHILDREN, SECTIONS, VERSION, validate_cut
 
 RULE_VERSION = 'section-1.0'
@@ -16,10 +17,28 @@ def balance_terms(input_kwh,output_kwh,authorized_kwh,loss_kwh):
     residual=input_kwh-output_kwh-authorized_kwh-loss_kwh
     return residual,residual/max(input_kwh,1e-6)
 
-def reconcile(run_id, seq, readings, sigmas=None):
+def reconcile(run_id, seq, readings, sigmas=None, installed=None):
+    """installed: set of asset ids whose meters exist, or None for a fully instrumented network.
+
+    An absent meter is an observability limit, not a repairable data fault, so such a cut
+    returns residual=None with validity 'insufficient_observability' and never qualifies.
+    """
     result=[]
     for s in SECTIONS:
         sid=s['id']; cut=CHILDREN[sid]; validate_cut(sid,cut)
+        observability,absent=coverage.observability(sid,cut,installed)
+        if observability=='INSUFFICIENT_OBSERVABILITY':
+            result.append(dict(id=f'balance-{run_id}-{seq}-{sid}',run_id=run_id,boundary_asset_id=sid,
+                interval_start=readings[sid]['interval_start'] if sid in readings else None,
+                interval_end=readings[sid]['interval_end'] if sid in readings else None,
+                input_meter_id=s['meter_id'],output_meter_ids=[BY_ID[x]['meter_id'] for x in cut],
+                input_kwh=None,output_sum_kwh=None,authorized_unmetered_kwh=0.0,expected_loss_kwh=None,
+                residual_kwh=None,residual_ratio=None,sigma_kwh=None,threshold_kwh=None,
+                completeness_ratio=0.0,validity='insufficient_observability',
+                invalid_reasons=[f'{BY_ID[a]["id"]}: meter not installed under this coverage profile' for a in absent],
+                uninstrumented_asset_ids=absent,topology_version=VERSION,analysis_version=ANALYSIS_VERSION,
+                negative_review=False,qualifies=False))
+            continue
         rs=[readings[x] for x in [sid]+cut]
         reasons=[]
         for r in rs:
@@ -41,8 +60,13 @@ def detect(run_id, seq, balances, readings, previous, streaks, baseline):
     quality=[]
     for b in balances:
         sid=b['boundary_asset_id']; streaks[sid]=streaks.get(sid,0)+1 if b['qualifies'] else 0
-        if b['validity']!='valid' or b['negative_review']:
-            quality.append(dict(asset_id=sid,reason='; '.join(b['invalid_reasons']) or 'Negative residual: mapping, export or meter review required'))
+        if b['validity']=='insufficient_observability':
+            # A permanent instrumentation limit, not a repairable reading fault.
+            quality.append(dict(asset_id=sid,kind='observability',
+                reason='; '.join(b['invalid_reasons']),
+                recommended='Install sectional measurement or reconcile at a complete ancestor cut.'))
+        elif b['validity']!='valid' or b['negative_review']:
+            quality.append(dict(asset_id=sid,kind='data_quality',reason='; '.join(b['invalid_reasons']) or 'Negative residual: mapping, export or meter review required'))
         if streaks[sid]>=3:
             a=alerts.get(sid) or dict(id=f'alert-{run_id}-{sid}',run_id=run_id,boundary_asset_id=sid,first_interval=seq-2,rule_id='persistent_excess_residual',rule_version=RULE_VERSION,priority='high',reason_codes=['residual_above_uncertainty_threshold','three_consecutive_valid_intervals'],balance_ids=[],candidate_meter_ids=[])
             a.update(last_interval=seq,consecutive_intervals=streaks[sid],status='active',unexplained_kwh=b['residual_kwh'],residual_ratio=b['residual_ratio'])
@@ -57,5 +81,6 @@ def detect(run_id, seq, balances, readings, previous, streaks, baseline):
                         a['candidate_meter_ids'].append(BY_ID[hid]['meter_id'])
             alerts[sid]=a
         elif sid in alerts:
-            alerts[sid]['status']='data_incomplete' if b['validity']!='valid' else 'cleared'
+            alerts[sid]['status']=('insufficient_observability' if b['validity']=='insufficient_observability'
+                                   else 'data_incomplete' if b['validity']!='valid' else 'cleared')
     return list(alerts.values()),quality,streaks

@@ -5,7 +5,36 @@ from .topology import ASSETS, SECTIONS, CHILDREN, BY_ID, VERSION
 from .analytics import COEFFICIENTS
 
 START=datetime(2022,8,31,18,30,tzinfo=timezone.utc)  # 1 September 2022 00:00 IST
-SCENARIOS=['clean','visible_unmetered_load','missing_telemetry','legitimate_load_change','meter_underregistration','hidden_bypass','technical_loss_change','topology_mismatch','occlusion']
+
+# Scenario G (PRD section 7): hold the APPARENT imbalance comparable while varying evidence
+# quality, so the recommended next check must follow the observed evidence rather than the
+# scenario name. Each variant injects the same 1.2 kWh excess on the same branch; only the
+# accompanying observation defect differs.
+MATCHED_RESIDUAL_SEVERITY=1.2
+MATCHED_RESIDUAL_TARGET='branch-03'
+# variant -> (primary excess mechanism, accompanying observation defect)
+# 'model_shift' carries no unmetered load at all: an elevated technical loss alone produces a
+# comparable apparent excess from an entirely different cause, which is the point of the test.
+MATCHED_RESIDUAL={
+    'matched_residual_complete':('visible_unmetered_load',None),
+    'matched_residual_incomplete':('visible_unmetered_load','missing_telemetry'),
+    'matched_residual_stale_mapping':('visible_unmetered_load','topology_mismatch'),
+    'matched_residual_model_shift':('technical_loss_change',None),
+}
+
+SCENARIOS=['clean','visible_unmetered_load','missing_telemetry','legitimate_load_change',
+           'meter_underregistration','hidden_bypass','technical_loss_change','topology_mismatch',
+           'occlusion',*MATCHED_RESIDUAL]
+
+
+def matched_residual_incidents(scenario,start=1,end=80,target=MATCHED_RESIDUAL_TARGET):
+    """A comparable apparent excess, paired with at most one observation defect."""
+    primary,companion=MATCHED_RESIDUAL[scenario]
+    events=[dict(type=primary,target_asset_id=target,start=start,end=end,
+                 severity=MATCHED_RESIDUAL_SEVERITY)]
+    if companion:
+        events.append(dict(type=companion,target_asset_id=target,start=start,end=end,severity=1.0))
+    return events
 
 def stamp(seq): return (START+timedelta(minutes=15*seq)).isoformat().replace('+00:00','Z')
 

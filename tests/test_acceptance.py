@@ -26,6 +26,13 @@ def case(c,seed=42):
     s=run(c,seed=seed);s=step(c,s['run']['id'],3);a=s['alerts'][0]
     created=post(c,'/cases',{'alert_id':a['id'],'idempotency_key':'one'})
     return created
+def ground(c,cid,actor='reviewer',key='ground-1',question='Overhead span above the pole is screened from the footpath; is there an unmatched connection?',visibility='obstructed',resolved=False):
+    """PRD FR-07: aerial review now requires a recorded, unanswered ground question."""
+    body=dict(idempotency_key=key,access='obtained',observed_asset_ids=['branch-03'],
+              visibility=visibility,resolved_from_ground=resolved,
+              outstanding_question='' if resolved else question,notes='Synthetic ground observation.')
+    return post(c,f'/cases/{cid}/ground-observations',body,actor)
+
 def move(c,case,state,actor='reviewer',reason='Recorded uncertainty and requested a field check.',disposition='inconclusive'):
     return patch(c,'/cases/'+case['id'],dict(expected_revision=case['revision'],state=state,reason=reason,disposition=disposition),actor)
 
@@ -120,6 +127,11 @@ def test_case_roles_revision_mission_export_and_reopen(client,seed):
     patch(client,'/cases/'+cid,dict(expected_revision=0,note='stale'),'reviewer',409)
     c=patch(client,'/cases/'+cid,dict(expected_revision=c['revision'],assigned_to='Demo reviewer'))
     c=move(client,c,'triaged','analyst')
+    # Aerial approval is refused until ground review leaves a specific question open.
+    post(client,f'/cases/{cid}/missions',dict(approved=True,idempotency_key='too-early'),'reviewer',409)
+    ground(client,cid)
+    c=client.get('/api/cases/'+cid).json()['case']
+    assert c['state']=='ground_review'
     post(client,f'/cases/{cid}/missions',dict(approved=True,idempotency_key='approved'),'analyst',403)
     post(client,f'/cases/{cid}/missions',dict(approved=False,idempotency_key='not-approved'),'reviewer',400)
     m=post(client,f'/cases/{cid}/missions',dict(approved=True,idempotency_key='approved'),'reviewer')
@@ -153,7 +165,7 @@ def test_case_roles_revision_mission_export_and_reopen(client,seed):
     with pytest.raises(Exception):store.DB.execute('DELETE FROM audit WHERE case_id=?',(cid,))
 
 def test_image_validation(client):
-    c=case(client);c=move(client,c,'triaged','analyst');m=post(client,f"/cases/{c['id']}/missions",dict(approved=True,idempotency_key='image-validation'),'reviewer');patch(client,'/missions/'+m['id'],dict(status='flying'),'reviewer')
+    c=case(client);c=move(client,c,'triaged','analyst');ground(client,c['id'],key='image-validation-ground');m=post(client,f"/cases/{c['id']}/missions",dict(approved=True,idempotency_key='image-validation'),'reviewer');patch(client,'/missions/'+m['id'],dict(status='flying'),'reviewer')
     pose=fixture_image()[1]
     post(client,f"/missions/{m['id']}/frames",dict(png_base64=base64.b64encode(b'not-png').decode(),camera_pose=pose,capture_sequence=m['capture_sequence'],approved_geometry_version='topology-1',frame_key='bad',capture_source='pixel_control_fixture'),'reviewer',400)
     patch(client,'/missions/'+m['id'],dict(status='capturing'),'reviewer')
@@ -174,7 +186,7 @@ def test_observed_revision_restore_and_duplicate_rejection(client):
     assert archived['recomputations'];assert any(r['readings']['household-07']['energy_import_kwh'] is None for r in archived['revisions'])
 
 def test_failed_processing_preserves_original_and_review_path(client,monkeypatch):
-    c=case(client);c=move(client,c,'triaged','analyst');m=post(client,f"/cases/{c['id']}/missions",dict(approved=True,idempotency_key='cv-failure'),'reviewer');patch(client,'/missions/'+m['id'],dict(status='flying'),'reviewer')
+    c=case(client);c=move(client,c,'triaged','analyst');ground(client,c['id'],key='cv-failure-ground');m=post(client,f"/cases/{c['id']}/missions",dict(approved=True,idempotency_key='cv-failure'),'reviewer');patch(client,'/missions/'+m['id'],dict(status='flying'),'reviewer')
     image,pose=fixture_image(positive=True);raw=cv2.imencode('.png',image)[1].tobytes()
     def fail(*args):raise RuntimeError('Deliberate processing failure control')
     monkeypatch.setattr(inspection,'detect',fail)

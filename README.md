@@ -410,6 +410,7 @@ Developed by **Team VidyutDrishti** for the **IBM SkillsBuild National Finale 20
 - **Tarun** ([@taruncodes07](https://github.com/taruncodes07))
 - **Sudeepti Sagar** ([@SudeeptiSagar](https://github.com/SudeeptiSagar))
 - **Saish Ambar** ([@ambarsaish](https://github.com/ambarsaish))
+- **Daivik Mankame** ([@daivikmank-bit](https://github.com/daivikmank-bit))
 
 ### Core References & Frameworks
 - India Ministry of Power, Aggregate Technical & Commercial (AT&C) Loss Reporting FY2024–25.

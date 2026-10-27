@@ -4,8 +4,8 @@ import {useEffect,useMemo,useRef,useState,forwardRef,useImperativeHandle} from '
 import * as THREE from 'three';
 import type {Asset,Snapshot,V3,Pose,Mission,Connection} from './types';
 import {sampleFlight,type FlightTelemetry} from './flight';
-export type SceneHandle={focus:()=>void;reset:()=>void;cancelTour:()=>void;capture:(pose:Pose)=>Promise<string>;fly:(mission:Mission)=>Promise<void>};
-type Props={snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean;inspection?:boolean;onFlightProgress?:(value:FlightTelemetry)=>void;onReady?:()=>void;onUnavailable?:()=>void;paused?:boolean;rotating?:boolean;motion?:boolean;onManualCamera?:()=>void};
+export type SceneHandle={focus:(id?:string)=>void;reset:()=>void;cancelTour:()=>void;capture:(pose:Pose)=>Promise<string>;fly:(mission:Mission)=>Promise<void>};
+type Props={presentationView?:'overview'|'section'|'drone';presentationShot?:number;snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean;inspection?:boolean;onFlightProgress?:(value:FlightTelemetry)=>void;onReady?:()=>void;onUnavailable?:()=>void;paused?:boolean;rotating?:boolean;motion?:boolean;onManualCamera?:()=>void};
 const blue='#3b82f6',royalBlue='#2563eb',amber='#f59e0b',slate='#475569';
 
 // One draw call; positions advance in seconds rather than frames.
@@ -269,7 +269,7 @@ function Drone({active,reduced}:{active:boolean;reduced:boolean}){
   {[-.7,.7].map(x=><Box key={x} p={[x,-.55,0]} s={[.08,.5,1.6]} color="#334155"/>)}
  </group>;
 }
-const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced,inspection,onFlightProgress,onReady,onUnavailable,rotating=false,motion=true,onManualCamera},ref){
+const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced,inspection,onFlightProgress,onReady,onUnavailable,rotating=false,motion=true,onManualCamera,presentationView,presentationShot},ref){
  const {gl,scene,camera}=useThree(); const controls=useRef<any>(null);const overlay=useRef<THREE.Group>(null);const drone=useRef<THREE.Group>(null);const [mission,setMission]=useState<Mission|null>(null);
  const flight=useRef<{start:number;resolve:()=>void;reject:(error:Error)=>void;mission:Mission;timer:ReturnType<typeof setTimeout>;lastUpdate:number;route?:V3[]}|null>(null); const fps=useRef({t:0,n:0});
  const [flightActive,setFlightActive]=useState(false);const [routeComplete,setRouteComplete]=useState(false);
@@ -277,9 +277,19 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
  const asset=snapshot.assets.find(a=>a.id===selected)!;const targetBranch=asset.kind==='household'?asset.parent_id!:selected;
  const status=snapshot.balances.find(b=>b.boundary_asset_id===targetBranch);const anomalous=snapshot.alerts.filter(a=>a.status==='active').map(a=>a.boundary_asset_id);
  const selectedColor=anomalous.includes(targetBranch)?amber:blue;
+ const cameraMove=useRef<{from:THREE.Vector3;to:THREE.Vector3;targetFrom:THREE.Vector3;targetTo:THREE.Vector3;elapsed:number}|null>(null);
+ useEffect(()=>{
+  if(!presentationView||!controls.current||flight.current)return;
+  const p=new THREE.Vector3(...asset.position_m);
+  const target=presentationView==='overview'?new THREE.Vector3(0,3,0):presentationView==='drone'?new THREE.Vector3(0,6,-22):p;
+  const to=presentationView==='overview'?new THREE.Vector3(100,95,120):presentationView==='drone'?new THREE.Vector3(30,27,10):p.clone().add(new THREE.Vector3(40,38,50));
+  if(reduced){camera.position.copy(to);controls.current.target.copy(target);controls.current.update();cameraMove.current=null}
+  else cameraMove.current={from:camera.position.clone(),to,targetFrom:controls.current.target.clone(),targetTo:target,elapsed:0};
+ },[presentationView,presentationShot,reduced,camera]);
  const offset=useMemo(()=>new THREE.Vector3(),[]);
  useFrame((_,delta)=>{
-   if(rotating&&!reduced&&!inspection&&!flight.current&&!routeComplete&&controls.current){offset.copy(camera.position).sub(controls.current.target);offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP,Math.min(delta,.1)*.12);camera.position.copy(controls.current.target).add(offset);camera.lookAt(controls.current.target)}
+   const move=cameraMove.current;if(move&&!flight.current&&controls.current){move.elapsed+=Math.min(delta,.1);const t=Math.min(1,move.elapsed/1.8),ease=t*t*(3-2*t);camera.position.lerpVectors(move.from,move.to,ease);controls.current.target.lerpVectors(move.targetFrom,move.targetTo,ease);controls.current.update();if(t===1)cameraMove.current=null}
+   if(rotating&&!cameraMove.current&&!reduced&&!inspection&&!flight.current&&!routeComplete&&controls.current){offset.copy(camera.position).sub(controls.current.target);offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP,Math.min(delta,.1)*.12);camera.position.copy(controls.current.target).add(offset);camera.lookAt(controls.current.target)}
    fps.current.n++;fps.current.t+=delta;if(fps.current.t>2){onFps?.(Math.round(fps.current.n/fps.current.t));fps.current={n:0,t:0}}
    if(flight.current&&drone.current){
     const f=flight.current,now=performance.now(),sample=sampleFlight(f.route||f.mission.waypoints_m,now-f.start,reduced);
@@ -311,10 +321,11 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
  useEffect(()=>{const abort=()=>{const f=flight.current;if(f){clearTimeout(f.timer);flight.current=null;f.reject(new Error('The flight view was interrupted. Retry the inspection to capture evidence.'))}};const lost=()=>{setFlightActive(false);onUnavailable?.();abort()};const restored=()=>onReady?.();gl.domElement.addEventListener('webglcontextlost',lost);gl.domElement.addEventListener('webglcontextrestored',restored);return()=>{gl.domElement.removeEventListener('webglcontextlost',lost);gl.domElement.removeEventListener('webglcontextrestored',restored);abort()}},[gl]);
  useEffect(()=>{if(inspection&&!flight.current){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(44,35,54)));controls.current?.target.copy(p.clone().add(new THREE.Vector3(0,5,10)));controls.current?.update()}},[inspection,asset.id,camera]);
  useImperativeHandle(ref,()=>({
-  focus(){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(32,30,40)));controls.current.target.copy(p);controls.current.update()},
-  reset(){if(flight.current)return;setMission(null);setRouteComplete(false);camera.position.set(100,95,120);controls.current.target.set(0,0,0);controls.current.update()},
+  focus(id){const chosen=snapshot.assets.find(a=>a.id===id)||asset,p=new THREE.Vector3(...chosen.position_m),to=p.clone().add(new THREE.Vector3(32,30,40));if(reduced){cameraMove.current=null;camera.position.copy(to);controls.current.target.copy(p);controls.current.update()}else cameraMove.current={from:camera.position.clone(),to,targetFrom:controls.current.target.clone(),targetTo:p,elapsed:0}},
+  reset(){if(flight.current)return;cameraMove.current=null;setMission(null);setRouteComplete(false);camera.position.set(100,95,120);controls.current.target.set(0,0,0);controls.current.update()},
   cancelTour(){const f=flight.current;if(f?.mission.id==='presentation-tour'){clearTimeout(f.timer);flight.current=null;setFlightActive(false);setMission(null);setRouteComplete(false);f.resolve()}},
   fly(m){
+   cameraMove.current=null;
    if(flight.current){clearTimeout(flight.current.timer);flight.current=null}
    const takeoff:V3=[0,.45,-22]; const climb:V3=[0,15,-22];
    const targetId=m.target_asset_ids?.[0]||asset.id;
@@ -436,7 +447,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
      return null;
    })()}
   </group>
-  <OrbitControls ref={controls} makeDefault onStart={onManualCamera} enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
+  <OrbitControls ref={controls} makeDefault onStart={()=>{cameraMove.current=null;onManualCamera?.()}} enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
  </>
 });
 export default function Scene({handle,onReady,paused,...props}:Props){return <Canvas frameloop={paused?'never':'always'} onCreated={()=>onReady?.()} camera={{position:[100,95,120],fov:40,near:.1,far:500}} dpr={[1,2]} gl={{antialias:true,powerPreference:'high-performance',alpha:false,stencil:false}}><World ref={handle} {...props} onReady={onReady}/></Canvas>}

@@ -52,3 +52,14 @@ For the actual RGB capture workflow:
 
 The detection/repair comparison is separate from the audited investigation workflow.
 An automated detection does not represent a completed real crew repair.
+
+
+## Guided cinematic presentation
+
+On every page load, choose **Start presentation** for a presenter-paced tour, or **Explore the app** to enter the cockpit. The toolbar?s **Presentation** button restarts the tour at any time outside an active operation/flight.
+
+Nine chapters introduce energy flow, the healthy baseline, asset selection, missing telemetry, persistent loss, analytical workers and human review, the virtual drone, the paired loss comparison, and scenario controls. Scenario chapters prepare paused seed-42 laboratory runs. Existing cases and runs are retained. No analytical provider call, case approval, or evidence capture is automatically performed by the walkthrough.
+
+Use **Next**, **Back**, or the chapter indicators. Left/right arrows work while the walkthrough card has focus; Escape or the close button exits. The spotlight identifies the current feature, while the underlying app remains interactive. Chapter actions advance a real simulation interval, select another branch, focus the camera, open section analysis, launch the renderer-only drone preview, open the comparison, or open the laboratory. Close a feature dialog to return to the same chapter. During scenario preparation and flights, navigation waits for completion; **End presentation** remains available and cancels a preview flight.
+
+Camera moves ease between the network, selected section and drone base. Manual camera input cancels the transition. Reduced-motion preferences use immediate camera changes and retain the existing reduced-motion flight behavior. On small screens, highlighted features scroll into view above the explanation card.

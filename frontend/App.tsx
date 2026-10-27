@@ -4,6 +4,7 @@ import type {SceneHandle} from './Scene';
 const Scene=lazy(()=>import('./Scene'));
 import {loadDemo} from './demo';
 import ComparisonPanel from './ComparisonPanel';
+import PresentationTour,{PresentationWelcome,CHAPTERS,type TourCommand} from './PresentationTour';
 import './presentation.css';
 import type {FlightTelemetry} from './flight';
 import InvestigationPanel from './InvestigationPanel';
@@ -24,6 +25,7 @@ const pretty=(s:string)=>words(s).replace(/^./,c=>c.toUpperCase());
 const newKey=()=>crypto.randomUUID();
 
 function App(){
+ const [welcomeOpen,setWelcomeOpen]=useState(true),[presentationActive,setPresentationActive]=useState(false),[presentationShot,setPresentationShot]=useState(0);
  const [comparisonOpen,setComparisonOpen]=useState(false),[rotating,setRotating]=useState(false),[motion,setMotion]=useState(true),[tourActive,setTourActive]=useState(false);
  const [analysisContext,setAnalysisContext]=useState<{snapshot:Snapshot;area:string}|null>(null);
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[selected,setSelected]=useState('branch-03'),[screen,setScreen]=useState<'network'|'inspection'>('network');
@@ -110,8 +112,8 @@ function App(){
   }catch(e){await api('/missions/'+m.id,'PATCH',{status:'failed',reason:(e as Error).message},missionActor).catch(()=>{});await refreshDetail(m.case_id).catch(()=>{});throw e}
   finally{flying.current=false;setMissionProgress('')}
  };
- const handleSelectPreset=(preset:number)=>perform(async()=>{
-  if(flying.current)return;
+ const applyPreset=async(preset:number)=>{
+  if(flying.current)throw new Error('End the drone flight before changing scenarios.');
   const next=await loadDemo(preset,api);
   ++loadSeq.current;pinnedSequence.current=null;activeRun.current=next.run.id;
   setSnapshot(next);setDemoPreset(preset);setSelected('branch-03');setSelectedCase(null);setDetail(null);
@@ -119,7 +121,8 @@ function App(){
   localStore.setItem('gridtrace-run-v1',next.run.id);
   const bootstrap=await api('/bootstrap');setRuns(bootstrap.runs);
   setNotice(['Baseline ready.','Missing telemetry loaded.','Persistent loss ready for investigation.'][preset-1]);
- });
+ };
+ const handleSelectPreset=(preset:number)=>perform(()=>applyPreset(preset));
  const dispatchDroneInspection=async()=>{await approve()};
  const openComparison=()=>perform(async()=>{
   if(!s||flying.current)return;
@@ -176,6 +179,38 @@ function App(){
   }catch(e){setError((e as Error).message)}
  };
 
+ const startPresentation=async()=>{
+  let prepared=false;
+  await perform(async()=>{
+  if(!s||flying.current)return;
+  if(s.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id)}
+  setWelcomeOpen(false);setWalkthrough(false);setPresenter(false);setNavigator(false);setHelp(false);setAnalysisContext(null);setEvalDrawerOpen(false);setComparisonOpen(false);setPresentationShot(0);setRotating(false);prepared=true;
+  });
+  if(prepared)setPresentationActive(true);
+ };
+ const endPresentation=()=>{scene.current?.cancelTour();setPresentationActive(false);setRotating(false)};
+ const preparePresentationChapter=async(index:number)=>{
+  if(operation.current)throw new Error('Wait for the current operation, then retry this chapter.');
+  operation.current=true;setBusy(true);
+  try{
+   setRotating(false);setScreen('network');setDetail(null);setSelectedCase(null);setAnalysisContext(null);setComparisonOpen(false);setEvalDrawerOpen(false);setPresenter(false);setSelected('branch-03');
+   pinnedSequence.current=null;
+   const chapter=CHAPTERS[index];
+   if('preset' in chapter)await applyPreset(chapter.preset);
+   else if(s?.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id,null)}
+   setPresentationShot(index);
+  }finally{operation.current=false;setBusy(false)}
+ };
+ const presentationAction=async(command:TourCommand)=>{
+  if(command==='step')await control('step');
+  else if(command==='branch'){const branches=s?.assets.filter(a=>a.kind==='branch')||[];const next=branches[(branches.findIndex(a=>a.id===selected)+1)%branches.length];if(next){select(next.id);scene.current?.focus(next.id)}}
+  else if(command==='focus'){setRotating(false);scene.current?.focus()}
+  else if(command==='analyze'&&s&&boundary)setAnalysisContext({snapshot:s,area:boundary});
+  else if(command==='drone')await previewDrone();
+  else if(command==='compare')await openComparison();
+  else if(command==='lab')setPresenter(true);
+ };
+
  return <div className={'app cockpit-app '+(reduced?'reduced':'')}>
  {analysisContext&&<InvestigationPanel key={`${analysisContext.snapshot.run.id}-${analysisContext.area}-${analysisContext.snapshot.seq}`} snapshot={analysisContext.snapshot} area={analysisContext.area} actor={actor} caseAvailable={analysisContext.snapshot.alerts.some(a=>a.boundary_asset_id===analysisContext.area&&a.status==='active')} existingCaseInterval={cases.find(c=>c.alert_id===analysisContext.snapshot.alerts.find(a=>a.boundary_asset_id===analysisContext.area&&a.status==='active')?.id)?.analysis_sequence} caseBusy={busy} onOpenCase={()=>createCaseFor(analysisContext.snapshot,analysisContext.area)} onClose={()=>setAnalysisContext(null)}/>}
 
@@ -194,6 +229,7 @@ function App(){
   evalDrawerOpen={evalDrawerOpen}
   onControlSim={control}
   onCompare={openComparison}
+  onPresentation={startPresentation}
 
  />
 
@@ -244,6 +280,8 @@ function App(){
         reduced={reduced}
         inspection={screen==='inspection'}
         paused={comparisonOpen}
+        presentationView={presentationActive?CHAPTERS[presentationShot].view:undefined}
+        presentationShot={presentationShot}
         rotating={rotating}
         motion={motion}
         onManualCamera={()=>setRotating(false)}
@@ -309,6 +347,8 @@ function App(){
  {presenter&&s&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="drawer-heading"><h2 id="scenario-title"><FlaskConical size={20}/>Simulation laboratory</h2><button aria-label="Close scenario controls" onClick={()=>setPresenter(false)}><X size={19}/></button></div><button className="primary full" disabled={busy||flying.current} onClick={startMonth}>Open September 2022 replay</button><hr/><h3>Scenario laboratory</h3><p className="scenario-selection">Next run: <strong>{pretty(scenario)}</strong></p><div className="form-grid"><label>Seed<input type="number" min={0} max={1000000} value={seed} onChange={e=>setSeed(+e.target.value)}/></label><label>Scenario<select value={scenario} onChange={e=>setScenario(e.target.value)}>{scenarios.map(c=><option value={c} key={c}>{pretty(c)}</option>)}</select></label>{!!profiles.length&&<label>Metering coverage<select value={coverageProfile} onChange={e=>setCoverageProfile(e.target.value)}>{profiles.map(c=><option value={c.id} key={c.id}>{c.label}</option>)}</select></label>}</div>{!!profiles.length&&<p className="micro">{profiles.find(c=>c.id===coverageProfile)?.note}<br/><em>{profiles.find(c=>c.id===coverageProfile)?.reference}</em></p>}<button className="primary full" disabled={busy||flying.current} onClick={()=>perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed,scenario,mode:'laboratory',coverage_profile:coverageProfile});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setScreen('network');setPresenter(false);const b=await api('/bootstrap');setRuns(b.runs);setTruth(null)})}>Start selected scenario<ArrowRight size={16}/></button><p className="micro">Scenario starts at interval 1 and ends at 80. Visible/hidden load: 1.2 kWh per interval. Under-registration: 85%. Missing data remains null.</p><hr/><h3>Inject into this run</h3>{s.run.mode==='replay'&&<p role="status">Replay is read-only. Start a laboratory run to inject incidents.</p>}<p className="micro">Requires the Demo presenter identity. Private incident settings are excluded from analyst snapshots.</p><label>Target branch<select value={target} onChange={e=>setTarget(e.target.value)}>{s.assets.filter(a=>a.kind==='branch').map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></label><div className="form-grid"><label>Start interval<input type="number" min={s.seq+1} max={(s.run.interval_count||96)-1} value={start} onChange={e=>setStart(+e.target.value)}/></label><label>End (exclusive)<input type="number" min={1} max={s.run.interval_count||96} value={end} onChange={e=>setEnd(+e.target.value)}/></label><label>Severity (kWh / multiplier)<input type="number" step=".1" min=".1" max="20" value={severity} onChange={e=>setSeverity(+e.target.value)}/></label></div><button className="secondary full" disabled={busy||scenario==='clean'||s.run.mode==='replay'} onClick={()=>perform(async()=>{await api(`/runs/${s.run.id}/incidents`,'POST',{type:scenario,target_asset_id:target,start,end,severity},actor);setPresenter(false)})}>Inject selected scenario</button><button disabled={s.run.mode==='replay'} className="text-button" onClick={()=>perform(async()=>setTruth(await api(`/runs/${s.run.id}/truth`,'GET',undefined,actor)))}>Explicitly reveal private simulator truth</button>{truth!==null&&<pre className="truth">{JSON.stringify(truth,null,2)}</pre>}<hr/><label>Saved runs<select value={s.run.id} disabled={flying.current} onChange={e=>perform(async()=>{await loadRun(e.target.value,null);setPresenter(false);setSelectedCase(null);setDetail(null)})}>{runs.map(r=><option key={r.id} value={r.id}>{r.id} · seed {r.seed} · interval {r.seq+1}</option>)}</select></label></section></div>}
  {help&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Workspace guide"><div className="drawer-heading"><h2>Investigate with Grid Trace</h2><button aria-label="Close guide" onClick={()=>setHelp(false)}><X size={18}/></button></div><ol className="guide"><li>Open the simulation laboratory and start a visible unmetered load scenario.</li><li>Step three times, or play at 10×. The branch alert appears after three valid affected intervals.</li><li>Open an investigation as Demo analyst, assign an owner and triage.</li><li>Open Workers, impact and evaluation. Run W1–W4, inspect evidence and follow-up checks, then open case review.</li><li>Select Demo reviewer and continue without visual evidence. Optional drone/CV can be skipped.</li><li>Begin human review, record a note and request field inspection. Resolve or dismiss using Demo supervisor with a reason and disposition.</li><li>Export JSON/Markdown and original/annotated PNGs. New runs retain old cases.</li></ol><p className="notice">Synthetic-image detection is limited to controlled overhead views. This application does not establish real-world theft or field accuracy.</p><p className="micro">The local identity selector is a simulated role gate, not secure authentication. Bind the application to localhost.</p></section></div>}
  {correction&&s&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Revise observed reading"><div className="drawer-heading"><h2>Revise observed reading</h2><button aria-label="Close reading revision" onClick={()=>setCorrection(null)}><X size={18}/></button></div><p>{correction.aid} · interval {correction.sequence} · current revision {correction.revision}</p><p>This is an explicitly supplied observation, separate from private simulator truth. Earlier observations and analyses are retained. Existing case reports remain frozen.</p><label>Aligned 15-minute energy (kWh)<input autoFocus type="number" min={0} step="0.001" value={correction.value} onChange={e=>setCorrection({...correction,value:e.target.value})}/></label><button className="primary full" disabled={busy||correction.value===''} onClick={()=>perform(async()=>{const next=await api<Snapshot>(`/runs/${s.run.id}/readings/revise`,'POST',{asset_id:correction.aid,sequence:correction.sequence,expected_revision:correction.revision,energy_import_kwh:Number(correction.value),quality:'valid'},actor);setSnapshot(next);setCorrection(null)})}>Save revision and recompute</button><p className="micro">Requires analyst or supervisor identity. Duplicate/stale revisions are rejected.</p></section></div>}
+ {welcomeOpen&&<PresentationWelcome ready={!!s&&!busy&&!flying.current} onPresent={startPresentation} onExplore={()=>setWelcomeOpen(false)}/>}
+ {presentationActive&&s&&<PresentationTour onStage={preparePresentationChapter} onAction={presentationAction} onClose={endPresentation} blocked={busy} obscured={comparisonOpen||!!analysisContext||presenter||navigator||evalDrawerOpen||groundOpen||walkthrough||help}/>}
  {walkthrough&&s&&<WalkthroughModal snapshot={s} detail={detail} cases={cases} actor={actor} screen={screen} onClose={()=>setWalkthrough(false)} onSelectAsset={(id)=>select(id)} onSetActor={(r)=>setActor(r)} onSetScreen={(scr)=>setScreen(scr)} onSetInspectorTab={(tab)=>setInspectorTab(tab)} onDispatchDrone={dispatchDroneInspection} onFocusAsset={()=>scene.current?.focus()} onTriggerScenario={async(sc,se)=>{await perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed:se,scenario:sc,mode:'laboratory',coverage_profile:coverageProfile});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setScreen('network');const b=await api('/bootstrap');setRuns(b.runs);setTruth(null)})}} onStepSimulation={async(count)=>{for(let i=0;i<count;i++){await control('step')}}} onCreateAndOpenCase={async(area)=>{if(s)await createCaseFor(s,area)}} onRecordGroundReview={async()=>{setGroundVisibility('obstructed');setGroundQuestion('Overhead service tap point not visible from ground road level');setGroundResolved(false);await recordGround()}} onApproveFlight={async()=>{await approve()}} onExportReport={async(format)=>{await exportReport(format)}}/>}
  </div>
 }

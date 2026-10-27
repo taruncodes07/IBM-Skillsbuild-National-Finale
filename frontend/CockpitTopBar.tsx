@@ -1,7 +1,7 @@
 import {Radio,Play,Pause,SkipForward,FlaskConical,Compass} from 'lucide-react';
 import type {Snapshot} from './types';
 import {date} from './api';
-type Props={snapshot:Snapshot|null;actor:string;demoPreset?:number;busy?:boolean;locked?:boolean;reviewLocked?:boolean;onControlSim:(command:string,speed?:number)=>void;onSelectPreset:(preset:number)=>void;onActorChange:(actor:string)=>void;onToggleWalkthrough:()=>void;onToggleScenarios:()=>void;onToggleEvalDrawer:()=>void;onCompare:()=>void;evalDrawerOpen?:boolean};
+type Props={snapshot:Snapshot|null;actor:string;demoPreset?:number;busy?:boolean;locked?:boolean;reviewLocked?:boolean;onControlSim:(command:string,speed?:number)=>void;onSelectPreset:(preset:number)=>void;onActorChange:(actor:string)=>void;onToggleWalkthrough:()=>void;onToggleScenarios:()=>void;onToggleEvalDrawer:()=>void;onCompare:()=>void;onPresentation:()=>void;evalDrawerOpen?:boolean};
 export default function CockpitTopBar(p:Props){
  const s=p.snapshot,playing=s?.run.playing,atEnd=!!s&&s.seq>=(s.run.interval_count||96)-1;
  return <header className="cockpit-topbar">
@@ -14,6 +14,6 @@ export default function CockpitTopBar(p:Props){
    <select aria-label="Replay speed" value={s?.run.speed||10} onChange={e=>p.onControlSim('speed',+e.target.value)} disabled={p.busy||p.locked||p.reviewLocked||!s}><option value={1}>1x</option><option value={10}>10x</option><option value={60}>60x</option></select>
    <div className="time-display"><strong>{s?date(s.simulation_time,true):'--'} <small>IST</small></strong><small>Interval {s?s.seq+1:0} / {s?.run.interval_count||96}</small></div>
   </div>
-  <div className="right-tools"><button onClick={p.onToggleScenarios} disabled={p.busy||p.locked} aria-label="Open scenario laboratory" title="Scenario laboratory"><FlaskConical size={16}/></button><button onClick={p.onToggleWalkthrough} title="Guide" aria-label="Open guide"><Compass size={16}/></button><button onClick={p.onToggleEvalDrawer} aria-expanded={p.evalDrawerOpen}>Evidence</button><select aria-label="Simulated role" value={p.actor} disabled={p.busy||p.locked} onChange={e=>p.onActorChange(e.target.value)}><option value="analyst">Analyst</option><option value="reviewer">Reviewer</option><option value="supervisor">Supervisor</option><option value="presenter">Presenter</option></select></div>
+  <div className="right-tools"><button className="presentation-launch" disabled={p.busy||p.locked||!s} onClick={p.onPresentation}><Play size={14}/>Presentation</button><button onClick={p.onToggleScenarios} disabled={p.busy||p.locked} aria-label="Open scenario laboratory" title="Scenario laboratory"><FlaskConical size={16}/></button><button onClick={p.onToggleWalkthrough} title="Guide" aria-label="Open guide"><Compass size={16}/></button><button onClick={p.onToggleEvalDrawer} aria-expanded={p.evalDrawerOpen}>Evidence</button><select aria-label="Simulated role" value={p.actor} disabled={p.busy||p.locked} onChange={e=>p.onActorChange(e.target.value)}><option value="analyst">Analyst</option><option value="reviewer">Reviewer</option><option value="supervisor">Supervisor</option><option value="presenter">Presenter</option></select></div>
  </header>;
 }

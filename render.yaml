@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: vidyut-trace
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/health
+    envVars:
+      - key: GRIDTRACE_DATA
+        value: /var/lib/gridtrace
+      - key: LANGSMITH_TRACING
+        value: "false"
+      - key: WATSONX_URL
+        value: https://eu-de.ml.cloud.ibm.com
+      - key: WATSONX_MODEL_ID
+        value: ibm/granite-4-h-small
+      - key: WATSONX_API_KEY
+        sync: false
+      - key: WATSONX_PROJECT_ID
+        sync: false

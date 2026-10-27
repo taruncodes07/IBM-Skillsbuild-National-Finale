@@ -1,16 +1,21 @@
 import {useState,useEffect,useRef,useCallback,Component,lazy,Suspense,type ReactNode} from 'react';
-import {Activity,ArrowRight,Box,Check,CheckCircle2,ChevronRight,ClipboardList,Download,FileText,FlaskConical,Focus,GitBranch,House,Info,Layers,Map,Maximize2,Pause,Play,Radio,RotateCcw,Search,Settings2,ShieldCheck,SkipForward,TriangleAlert,UserRound,X,ZoomIn,ZoomOut,Camera,Navigation,ScanLine} from 'lucide-react';
+import {Activity,ArrowRight,Box,Building2,Check,CheckCircle2,ChevronRight,ClipboardList,Compass,Download,FileText,FlaskConical,Focus,GitBranch,House,Info,Layers,Map,Maximize2,Pause,Play,Radio,RotateCcw,Search,Settings2,ShieldCheck,SkipForward,TriangleAlert,UserRound,X,ZoomIn,ZoomOut,Camera,Navigation,ScanLine} from 'lucide-react';
 import type {SceneHandle} from './Scene';
 const Scene=lazy(()=>import('./Scene'));
-import MonthReplay from './MonthReplay';
-import MissionBrief from './MissionBrief';
+import {loadDemo} from './demo';
+import ComparisonPanel from './ComparisonPanel';
+import './presentation.css';
 import type {FlightTelemetry} from './flight';
 import InvestigationPanel from './InvestigationPanel';
-import ActionsPanel from './ActionsPanel';
-import ProvenancePanel from './ProvenancePanel';
+import WalkthroughModal from './WalkthroughModal';
+import CockpitTopBar from './CockpitTopBar';
+import LeftHierarchyPanel from './LeftHierarchyPanel';
+import RightPipelinePanel from './RightPipelinePanel';
+import PiPDroneHUD from './PiPDroneHUD';
+import EvaluationDrawer from './EvaluationDrawer';
 import {localStore,sessionStore,readJson,restoreWorkspace,WORKSPACE_KEY,type Workspace} from './recovery';
 import {api,ApiError,date,n,words} from './api';
-import type {Snapshot,Case,Detail,Asset,Pose,Mission,Evidence,Ground} from './types';
+import type {Snapshot,Case,Detail,Asset,Pose,Mission,Evidence,Ground,V3} from './types';
 
 class SceneBoundary extends Component<{children:ReactNode;onUnavailable:()=>void},{failed:boolean}>{state={failed:false};static getDerivedStateFromError(){return {failed:true}}componentDidCatch(){this.props.onUnavailable()}render(){return this.state.failed?<div className="scene-error" role="status"><TriangleAlert/><h3>3D rendering unavailable</h3><p>Your case and captures are safe. Close unused 3D tabs, then retry. Asset navigation and human review remain available.</p><button onClick={()=>this.setState({failed:false})}>Retry 3D scene</button></div>:this.props.children}}
 const Icon=({kind}:{kind:string})=>kind==='household'?<House size={19}/>:kind==='branch'?<GitBranch size={19}/>:kind==='feeder'?<Radio size={19}/>:<Box size={19}/>;
@@ -18,24 +23,13 @@ const pct=(v:number|null|undefined)=>v==null?'—':(v*100).toFixed(1)+'%';
 const pretty=(s:string)=>words(s).replace(/^./,c=>c.toUpperCase());
 const newKey=()=>crypto.randomUUID();
 
-function Chart({snapshot,aid}:{snapshot:Snapshot;aid:string}){
- const bs=snapshot.history.map(h=>h.balances.find(b=>b.boundary_asset_id===aid)).filter((b):b is NonNullable<typeof b>=>b!=null);
- const top=Math.max(1,...bs.map(b=>b.input_kwh||0))*1.15;
- const line=(field:'input_kwh'|'output_sum_kwh')=>bs.map((b,i)=>b[field]==null?'':`${i?'L':'M'} ${12+i*236/Math.max(bs.length-1,1)} ${95-(b[field]||0)/top*80}`).join(' ');
- return <div className="history-chart"><svg viewBox="0 0 265 120" role="img" aria-label="Input and metered interval energy history in kWh">
-  {[15,40,65,95].map(y=><line key={y} x1="12" x2="250" y1={y} y2={y} stroke="#24313e" strokeWidth=".6"/>)}
-  {[12,60,108,156,204,250].map(x=><line key={x} y1="15" y2="95" x1={x} x2={x} stroke="#24313e" strokeWidth=".6"/>)}
-  <path d={line('input_kwh')} fill="none" stroke="#7f8cff" strokeWidth="2"/><path d={line('output_sum_kwh')} fill="none" stroke="#57dce8" strokeWidth="2"/>
-  {bs.length===1&&<circle cx="12" cy={95-(bs[0]!.input_kwh||0)/top*80} r="3" fill="#7f8cff"/>}
-  <text x="12" y="114">{bs.length>1?'Earlier':'Current interval'}</text><text x="210" y="114">Now</text><text x="12" y="10">{n(top,1)} kWh</text>
- </svg><div className="chart-key"><span><i className="indigo"/>Input</span><span><i/>Metered</span><small>15-min intervals</small></div></div>
-}
-
 function App(){
+ const [comparisonOpen,setComparisonOpen]=useState(false),[rotating,setRotating]=useState(false),[motion,setMotion]=useState(true),[tourActive,setTourActive]=useState(false);
  const [analysisContext,setAnalysisContext]=useState<{snapshot:Snapshot;area:string}|null>(null);
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[selected,setSelected]=useState('branch-03'),[screen,setScreen]=useState<'network'|'inspection'>('network');
  const [actor,setActor]=useState('analyst'),[cases,setCases]=useState<Case[]>([]),[detail,setDetail]=useState<Detail|null>(null),[selectedCase,setSelectedCase]=useState<string|null>(null);
- const [notice,setNotice]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[search,setSearch]=useState(''),[navigator,setNavigator]=useState(false),[presenter,setPresenter]=useState(false),[help,setHelp]=useState(false),[queueTab,setQueueTab]=useState('alerts');
+ const [notice,setNotice]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[search,setSearch]=useState(''),[navigator,setNavigator]=useState(false),[presenter,setPresenter]=useState(false),[help,setHelp]=useState(false),[walkthrough,setWalkthrough]=useState(false),[queueTab,setQueueTab]=useState('alerts'),[inspectorTab,setInspectorTab]=useState<'balance'|'meters'|'queue'>('balance');
+ const [demoPreset,setDemoPreset]=useState<number>(0),[streakMissing,setStreakMissing]=useState(false),[evalDrawerOpen,setEvalDrawerOpen]=useState(false),[droneCompleted,setDroneCompleted]=useState(false);
  const [seed,setSeed]=useState(42),[scenario,setScenario]=useState('clean'),[start,setStart]=useState(1),[end,setEnd]=useState(80),[severity,setSeverity]=useState(1.2),[target,setTarget]=useState('branch-03'),[truth,setTruth]=useState<unknown>(null);
  const [coverageProfile,setCoverageProfile]=useState('full_sectional'),[profiles,setProfiles]=useState<{id:string;label:string;note:string;reference:string}[]>([]);
  const [groundOpen,setGroundOpen]=useState(false),[groundVisibility,setGroundVisibility]=useState('obstructed'),[groundQuestion,setGroundQuestion]=useState(''),[groundResolved,setGroundResolved]=useState(false),[groundAccess,setGroundAccess]=useState('obtained');
@@ -60,7 +54,7 @@ function App(){
   if(!rid)throw new Error('No local run is available. Restart the server and retry.');
   const view=await loadRun(rid,saved?.sequence??null);if(!mounted.current)return;
   if(saved){setActor(saved.actor);setSelected(view.assets.some(a=>a.id===saved.assetId)?saved.assetId:'branch-03');
-   if(saved.caseId){const d=await refreshDetail(saved.caseId);if(!mounted.current)return;setSelectedCase(d.case.id);setOwner(d.case.assigned_to||'');setDisposition(d.case.disposition||'inconclusive');setNote(sessionStore.getItem('gridtrace-note-'+d.case.id)||'');setInspectionView(d.evidence.length?'evidence':'flight');setScreen('inspection')}
+   if(saved.caseId){const d=await refreshDetail(saved.caseId);if(!mounted.current)return;setSelectedCase(d.case.id);setOwner(d.case.assigned_to||'');setDisposition(d.case.disposition||'inconclusive');setNote(sessionStore.getItem('gridtrace-note-'+d.case.id)||'');setInspectionView(d.evidence.length?'evidence':'flight');setDroneCompleted(d.evidence.length>0);setScreen('inspection')}
    if(saved.analysis){try{const frozen=await api<Snapshot>(`/runs/${rid}/snapshot?seq=${saved.analysis.sequence}`);if(mounted.current&&frozen.assets.some(a=>a.id===saved.analysis!.area))setAnalysisContext({snapshot:frozen,area:saved.analysis.area})}catch{if(mounted.current)setNotice('The saved investigation view could not be restored. Open it again from the activity icon.')}}
   }
  }catch(e){if(mounted.current)setError((e as Error).message)}finally{initialized.current=true}})();const interval=setInterval(()=>setWall(new Date().toISOString()),1000);return()=>{mounted.current=false;clearInterval(interval)}},[loadRun,refreshDetail]);
@@ -70,21 +64,21 @@ function App(){
   stream.addEventListener('snapshot',(e)=>{const event=JSON.parse((e as MessageEvent).data);if(event.event_seq>last&&activeRun.current===rid){last=event.event_seq;setConnection('Live');loadRun(rid).catch(e=>setError((e as Error).message));refreshCases().catch(e=>console.error('[App] refreshCases error',e))}});
   stream.onopen=()=>setConnection('Live');stream.onerror=()=>setConnection('Reconnecting');return()=>stream.close();
  },[snapshot?.run.id,loadRun,refreshCases]);
- useEffect(()=>{if(analysisContext||!navigator&&!presenter&&!help&&!correction)return;
+ useEffect(()=>{if(analysisContext||!navigator&&!presenter&&!help&&!walkthrough&&!correction&&!groundOpen)return;
   const dialog=Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).at(-1);if(!dialog)return;
   const previous=document.activeElement as HTMLElement|null;
   const elements=()=>Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled),a[href],summary')).filter(el=>el.getClientRects().length);
   (dialog.querySelector<HTMLElement>('[autofocus]')||elements()[0])?.focus();
-  const keydown=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();if(correction)setCorrection(null);else if(help)setHelp(false);else if(presenter)setPresenter(false);else setNavigator(false)}else if(e.key==='Tab'){const items=elements(),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}};
+  const keydown=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();if(groundOpen)setGroundOpen(false);else if(walkthrough)setWalkthrough(false);else if(correction)setCorrection(null);else if(help)setHelp(false);else if(presenter)setPresenter(false);else setNavigator(false)}else if(e.key==='Tab'){const items=elements(),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}};
   document.addEventListener('keydown',keydown);return()=>{document.removeEventListener('keydown',keydown);previous?.focus()}
- },[navigator,presenter,help,!!correction,!!analysisContext]);
+ },[navigator,presenter,help,walkthrough,groundOpen,!!correction,!!analysisContext]);
  const s=snapshot;const asset=s?.assets.find(a=>a.id===selected);const boundary=asset?.kind==='household'?asset.parent_id:asset?.id;
  const balance=s?.balances.find(b=>b.boundary_asset_id===boundary);const alert=s?.alerts.find(a=>a.boundary_asset_id===boundary&&a.status==='active');
  const activeAlerts=s?.alerts.filter(a=>a.status==='active').sort((a,b)=>b.unexplained_kwh-a.unexplained_kwh)||[];
  const children=s?.assets.filter(a=>a.parent_id===asset?.id&&a.meter_id)||[];
  const selectedEvidence=detail?.evidence.find(e=>e.id===evidenceId)||detail?.evidence[0];
- const select=(id:string)=>{if(flying.current)return;if(screen==='inspection')setScreen('network');setSelected(id);setNavigator(false);setSearch('')};
- const openCase=async(c:Case)=>{if(flying.current)throw new Error('Finish or cancel the active mission before switching run context');setSelectedCase(c.id);setSelected(c.boundary_asset_id);await loadRun(c.run_id,c.analysis_sequence);const d=await refreshDetail(c.id);setOwner(d.case.assigned_to||'');setDisposition(d.case.disposition||'inconclusive');setNote(sessionStore.getItem('gridtrace-note-'+d.case.id)||'');setScreen('inspection');setEvidenceId('');setInspectionView(d.evidence.length?'evidence':'flight');setFlightStats(null)};
+ const select=(id:string)=>{if(flying.current)return;if(screen==='inspection'){setScreen('network');setDetail(null);setSelectedCase(null);setDroneCompleted(false);pinnedSequence.current=null;}setSelected(id);setNavigator(false);setSearch('')};
+ const openCase=async(c:Case)=>{if(flying.current)throw new Error('Finish or cancel the active mission before switching run context');setSelectedCase(c.id);setSelected(c.boundary_asset_id);await loadRun(c.run_id,c.analysis_sequence);const d=await refreshDetail(c.id);setOwner(d.case.assigned_to||'');setDisposition(d.case.disposition||'inconclusive');setNote(sessionStore.getItem('gridtrace-note-'+d.case.id)||'');setScreen('inspection');setEvidenceId('');setInspectionView(d.evidence.length?'evidence':'flight');setFlightStats(null);setDroneCompleted(d.evidence.length>0)};
  const patchCase=async(state?:string,extra:Record<string,unknown>={})=>{if(!detail)return;const cid=detail.case.id;
   try{const updated=await api<Case>('/cases/'+cid,'PATCH',{expected_revision:detail.case.revision,state,reason:note,disposition:state?disposition:undefined,...extra},actor);setDetail(current=>current?.case.id===cid?{...current,case:updated}:current);
    if(state||extra.note){sessionStore.removeItem('gridtrace-note-'+cid);setNote('')}
@@ -97,7 +91,7 @@ function App(){
  const startMonth=()=>perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed,mode:'replay'});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setPresenter(false);setScreen('network');const b=await api('/bootstrap');setRuns(b.runs)});
  const runMission=async(m:Mission)=>{
   if(!scene.current)throw new Error('The 3D scene is still loading. Wait for the mission view and retry.');if(flying.current)return;
-  flying.current=true;localStore.removeItem('gridtrace-mission-approval-'+m.case_id);setInspectionView('flight');setFlightStats(null);setMissionProgress('Preparing approved route');
+  flying.current=true;localStore.removeItem('gridtrace-mission-approval-'+m.case_id);setInspectionView('flight');setFlightStats(null);setMissionProgress('Preparing approved route');setDroneCompleted(false);
   const missionActor=actor;
   try{
    if(!['approved','failed'].includes(m.status))await api('/missions/'+m.id,'PATCH',{status:'failed',reason:'Reviewer explicitly restarted an inspection interrupted in an earlier session.'},missionActor);
@@ -112,11 +106,38 @@ function App(){
     const png=await scene.current.capture(pose);await api('/missions/'+m.id+'/frames','POST',{png_base64:png,camera_pose:pose,capture_sequence:m.capture_sequence,approved_geometry_version:'topology-1',frame_key:'view-'+i,capture_source:'webgl_scene'},missionActor);
     await refreshDetail(m.case_id);
    }
-   await api('/missions/'+m.id,'PATCH',{status:'completed'},missionActor);await refreshDetail(m.case_id);await refreshCases();setInspectionView('evidence');setNotice('Inspection complete. Two RGB views are ready for human review.');
+   await api('/missions/'+m.id,'PATCH',{status:'completed'},missionActor);await refreshDetail(m.case_id);await refreshCases();setInspectionView('evidence');setDroneCompleted(true);setNotice('Inspection complete. Two RGB views are ready for human review.');
   }catch(e){await api('/missions/'+m.id,'PATCH',{status:'failed',reason:(e as Error).message},missionActor).catch(()=>{});await refreshDetail(m.case_id).catch(()=>{});throw e}
   finally{flying.current=false;setMissionProgress('')}
  };
- const openQuestion=detail?.ground?.slice().reverse().find(g=>!g.resolved_from_ground&&g.outstanding_question.trim())||null;
+ const handleSelectPreset=(preset:number)=>perform(async()=>{
+  if(flying.current)return;
+  const next=await loadDemo(preset,api);
+  ++loadSeq.current;pinnedSequence.current=null;activeRun.current=next.run.id;
+  setSnapshot(next);setDemoPreset(preset);setSelected('branch-03');setSelectedCase(null);setDetail(null);
+  setAnalysisContext(null);setScreen('network');setDroneCompleted(false);setFlightStats(null);setTruth(null);setActor('analyst');
+  localStore.setItem('gridtrace-run-v1',next.run.id);
+  const bootstrap=await api('/bootstrap');setRuns(bootstrap.runs);
+  setNotice(['Baseline ready.','Missing telemetry loaded.','Persistent loss ready for investigation.'][preset-1]);
+ });
+ const dispatchDroneInspection=async()=>{await approve()};
+ const openComparison=()=>perform(async()=>{
+  if(!s||flying.current)return;
+  if(s.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id)}
+  setComparisonOpen(true);
+ });
+ const previewDrone=()=>perform(async()=>{
+  if(!scene.current||!s||flying.current||screen==='inspection')return;
+  if(s.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id)}
+  const renderer=scene.current;flying.current=true;setTourActive(true);setRotating(false);setFlightStats(null);
+  try{
+   // Renderer-only tour: no mission, case, approval or evidence is written to the API.
+   await renderer.fly({id:'presentation-tour',case_id:'',run_id:s.run.id,target_asset_ids:[boundary||'branch-03'],status:'flying',waypoints_m:[],capture_sequence:s.seq,failure_reason:null,frame_keys:{}});
+   setNotice('Drone tour complete. For RGB evidence capture, open a loss case, triage it and record a ground observation as Reviewer.');
+  }finally{renderer.reset();flying.current=false;setTourActive(false);setFlightStats(null)}
+ });
+ const latestGround=detail?.ground?.at(-1);
+ const openQuestion=latestGround&&!latestGround.resolved_from_ground&&latestGround.outstanding_question.trim()?latestGround:null;
  const groundResolvedLatest=!!detail?.ground?.length&&!!detail.ground[detail.ground.length-1].resolved_from_ground;
  const switchCoverage=(profileId:string)=>perform(async()=>{
   if(!s)return;
@@ -144,131 +165,151 @@ function App(){
   try{m=await api<Mission>('/cases/'+detail.case.id+'/missions','POST',{approved:true,idempotency_key:requestKey,waypoint_preset:'overhead-v1'},actor)}catch(e){if(e instanceof ApiError&&e.status&&e.status>=400&&e.status<500&&e.status!==408&&e.status!==429)localStore.removeItem(pendingKey);await refreshDetail(detail.case.id).catch(()=>{});throw e}
   localStore.removeItem(pendingKey);await loadRun(m.run_id,m.capture_sequence);await refreshDetail(detail.case.id);if(m.status==='completed'){setInspectionView('evidence');setNotice('The previous inspection already completed. Its saved captures are restored.');return}await runMission(m);
  });
- const exportReport=async(format:string)=>{if(!detail)return;const response=await fetch(`/api/cases/${detail.case.id}/export?format=${format}`,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw new Error('Export failed. Your saved case is unchanged; retry the download.');const blob=await response.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${detail.case.id}.${format}`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);setNotice(`${format==='json'?'JSON':'Markdown'} report prepared and download requested.`)};
+ const exportReport=async(format:string)=>{
+  if(!detail){setError('Open a case before exporting.');return;}
+  try{
+   const response=await fetch(`/api/cases/${detail.case.id}/export?format=${format}`,{signal:AbortSignal.timeout(20000)});
+   if(!response.ok)throw new Error('Export failed. Retry the download.');
+   const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+   link.href=url;link.download=`${detail.case.id}.${format}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   setNotice('Case report downloaded.');
+  }catch(e){setError((e as Error).message)}
+ };
 
- return <div className={'app '+(reduced?'reduced':'')}>
+ return <div className={'app cockpit-app '+(reduced?'reduced':'')}>
  {analysisContext&&<InvestigationPanel key={`${analysisContext.snapshot.run.id}-${analysisContext.area}-${analysisContext.snapshot.seq}`} snapshot={analysisContext.snapshot} area={analysisContext.area} actor={actor} caseAvailable={analysisContext.snapshot.alerts.some(a=>a.boundary_asset_id===analysisContext.area&&a.status==='active')} existingCaseInterval={cases.find(c=>c.alert_id===analysisContext.snapshot.alerts.find(a=>a.boundary_asset_id===analysisContext.area&&a.status==='active')?.id)?.analysis_sequence} caseBusy={busy} onOpenCase={()=>createCaseFor(analysisContext.snapshot,analysisContext.area)} onClose={()=>setAnalysisContext(null)}/>}
- <header className="topbar"><div className="brandmark"><Radio size={23}/></div><button className="brand" disabled={busy} onClick={()=>setScreen('network')}>Grid Trace</button><span className="slash">/</span><span className="page-name">{screen==='network'?'Network overview':'Case review workspace'}</span><span className="synthetic"><ShieldCheck size={12}/>{snapshot?.run.mode==='replay'?'Development fixture':'Synthetic laboratory'}</span>
- <div className="header-spacer"/>{screen==='inspection'&&detail&&<span className="header-case">{detail.case.id.slice(-6)} <span className="badge cyan">{pretty(detail.case.state)}</span></span>}
- <div className="searchbox"><Search size={16}/><input disabled={busy} aria-label="Search assets" placeholder="Search assets, meters…" value={search} onChange={e=>{setSearch(e.target.value);setNavigator(true)}} onFocus={()=>setNavigator(true)}/></div>
- <div className="wall-clock">{date(wall)} <small>IST · wall time</small></div><select className="identity" disabled={busy} aria-label="Simulated identity" value={actor} onChange={e=>setActor(e.target.value)}>{['analyst','reviewer','supervisor','presenter'].map(r=><option key={r} value={r}>Demo {r}</option>)}</select></header>
- <nav className="rail" aria-label="Primary navigation">
- <button disabled={busy} aria-label="Workers, impact and evaluation" title="Workers, impact and evaluation" onClick={()=>{if(s&&boundary)setAnalysisContext({snapshot:s,area:boundary})}}><Activity size={20}/><span className="nav-label">Agents</span></button>
- <button disabled={busy} title="Network overview" aria-label="Network overview" className={screen==='network'?'active':''} onClick={()=>setScreen('network')}><Map/><span className="nav-label">Network</span></button>
- <button disabled={busy} title="Inspection workspace" aria-label="Inspection workspace" className={screen==='inspection'?'active':''} onClick={()=>detail?perform(()=>openCase(detail.case)):setScreen('inspection')}><ScanLine/><span className="nav-label">Inspection</span></button>
- <button disabled={busy} title="Asset navigator" aria-label="Asset navigator" onClick={()=>setNavigator(v=>!v)}><GitBranch/><span className="nav-label">Assets</span></button>
- <button disabled={busy} title="Case archive" aria-label="Case archive" onClick={()=>{setQueueTab('cases');setScreen('network')}}><ClipboardList/><span className="nav-label">Cases</span></button>
- <button disabled={busy} title="Presenter scenarios" aria-label="Presenter scenarios" onClick={()=>setPresenter(true)}><FlaskConical/><span className="nav-label">Scenarios</span></button>
- <div className="rail-bottom"><button disabled={busy} title="Workspace guide" aria-label="Workspace guide" onClick={()=>setHelp(true)}><Info/></button><button disabled={busy} title="Toggle reduced motion" aria-label="Toggle reduced motion" aria-pressed={reduced} onClick={()=>setReduced(v=>!v)}><Settings2/></button></div>
- </nav>
+
+ <CockpitTopBar
+  snapshot={s}
+  actor={actor}
+  onActorChange={setActor}
+  demoPreset={s?.run.mode==='laboratory'?({'clean':1,'missing_telemetry':2,'visible_unmetered_load':3}[s.run.scenario||'']||0):0}
+  onSelectPreset={handleSelectPreset}
+  busy={busy}
+  locked={flying.current}
+  reviewLocked={screen==='inspection'}
+  onToggleWalkthrough={()=>setWalkthrough(true)}
+  onToggleScenarios={()=>setPresenter(true)}
+  onToggleEvalDrawer={()=>setEvalDrawerOpen(!evalDrawerOpen)}
+  evalDrawerOpen={evalDrawerOpen}
+  onControlSim={control}
+  onCompare={openComparison}
+
+ />
+
  {notice&&<div className="successbar" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={16}/></button></div>}
  {error&&<div className="errorbar" role="alert"><TriangleAlert size={17}/>{error}<button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
- {!s||!asset?<main className="loading"><Activity/><h2>Connecting to Grid Trace</h2><p>Loading the persistent run and aligned telemetry.</p><button onClick={()=>location.reload()}>Retry connection</button></main>:<>
- <main className={'workspace '+screen+(missionProgress?' mission-running':'')}>
- <aside className="left-panel scroll">
- {screen==='network'?<>
-  <button className="location" onClick={()=>setNavigator(true)}><span className="asset-icon"><Box/></span><span><strong>Hebbal–Sanjaynagar demo cell</strong><small>Fictional neighborhood · Bengaluru</small></span><ChevronRight size={16}/></button>
-  <div className="network-counts"><div><Radio/><strong>2</strong><small>Feeders</small></div><div><GitBranch/><strong>4</strong><small>Transformers</small></div><div><Activity/><strong>38</strong><small>Meter streams</small></div></div>
-  <h3>Selected asset <button className="text-button" onClick={()=>setNavigator(true)}>Browse all</button></h3>
-  <button className="selected-asset" onClick={()=>setNavigator(true)}><span className="asset-icon"><Icon kind={asset.kind}/></span><span><strong>{asset.label}</strong><small>{asset.parent_id?pretty(asset.parent_id):'Network source'}</small></span><ChevronRight size={16}/></button>
-  <div className="section-title"><h3>Interval energy balance</h3><Info size={14}/></div><p className="muted interval">{date(s.readings[selected]?.interval_start||balance!.interval_start,true)} – {date(s.simulation_time,true)} IST · 15 min</p>
-  {balance?<><div className="balance-table"><div><span>Input at section</span><strong>{n(balance.input_kwh)} <small>kWh</small></strong></div><div><span>Metered ({balance.output_meter_ids.length} outputs)</span><strong>{n(balance.output_sum_kwh)} <small>kWh</small></strong></div><div><span>Expected technical loss</span><strong>{n(balance.expected_loss_kwh)} <small>kWh</small></strong></div><div><span>Authorized unmetered</span><strong>0.000 <small>kWh</small></strong></div><div className={balance.qualifies?'amber-row':'residual-row'}><span>Unexplained</span><strong>{n(balance.residual_kwh)} <small>kWh</small></strong></div></div>
-  <div className="ratio"><span>Residual / section input</span><strong className={balance.qualifies?'amber-text':''}>{pct(balance.residual_ratio)}</strong></div>
-  <details className="calculation"><summary>Calculation & measurement boundary</summary><p>R = input − metered − authorized − expected loss</p><p>{n(balance.input_kwh)} − {n(balance.output_sum_kwh)} − 0 − {n(balance.expected_loss_kwh)} = {n(balance.residual_kwh)} kWh</p><p>Threshold = max(0.250 kWh, 8% of input, 3σ) = {n(balance.threshold_kwh)} kWh. σ = {n(balance.sigma_kwh)} kWh.</p><p>Input: {balance.input_meter_id}</p><p>Disjoint cut: {balance.output_meter_ids.join(', ')}</p><p>Frozen clean baseline; section-1.0. Branch/service losses only at branch boundary. No nested totals.</p></details>
-  <h3 className="space-top">Energy flow <span className="muted">(interval kWh)</span></h3><Chart snapshot={s} aid={boundary!}/>
-  <h3 className="space-top">Measurement quality <Info size={13}/></h3><div className="quality"><div className={'quality-ring '+(balance.validity!=='valid'?'warning':'')} style={{'--progress':balance.completeness_ratio*100+'%'} as React.CSSProperties}>{pct(balance.completeness_ratio).replace('.0','')}</div><div><strong>{balance.validity==='valid'?<><CheckCircle2 size={16}/>Complete boundary</>:balance.validity==='insufficient_observability'?<><TriangleAlert size={16}/>Not instrumented</>:<><TriangleAlert size={16}/>Data incomplete</>}</strong><small>{balance.validity==='valid'?'All required meters aligned':balance.invalid_reasons.join('; ')}</small></div></div>{balance.validity==='insufficient_observability'&&<p className="observability-note">No meter is installed on part of this cut under the active coverage profile, so no residual exists to investigate. This is an observability limit, not a missing reading, and it is never filled with zero. Install sectional measurement, or reconcile at a complete ancestor cut.</p>}
-  <ProvenancePanel runId={s.run.id}/></>:<p className="empty">This asset has no energy boundary.</p>}
- </>:detail?<>
-  <div className="case-heading"><span className="asset-icon"><FileText/></span><div><small>Case</small><h2>{detail.case.id.slice(-8).toUpperCase()}</h2><small>Distribution network investigation</small></div></div>
-  {[['branch',pretty(detail.case.boundary_asset_id),'Monitored boundary'],['transformer',pretty(asset.parent_id||''),'Parent asset'],['issue','Persistent imbalance','Branch-level localization; household unresolved']].map(([kind,label,sub])=><div className="context-row" key={kind}><span className="asset-icon">{kind==='issue'?<Activity/>:<Icon kind={kind}/>}</span><div><strong>{label}</strong><small>{sub}</small></div></div>)}
-  <div className="case-metric"><small>Unexplained energy · case interval</small><strong>{n(balance?.residual_kwh)} kWh</strong><hr/><small>Residual / input</small><strong>{pct(balance?.residual_ratio)}</strong></div>
-  <div className="case-timeline">{['open','triaged',...(detail.missions.length?['inspection_requested','evidence_ready']:[]),'under_review','field_check_required',...(['resolved','dismissed','reopened'].includes(detail.case.state)?[detail.case.state]:[])].map((state,i)=>{const current=detail.case.state;const event=detail.audit.find(e=>e.to_state===state);return <div key={state} className={event?'done':''}><span>{event?<Check size={13}/>:i+1}</span><div><strong>{pretty(state)}</strong><small>{event?date(event.wall_timestamp,true)+' IST':current===state?'In progress':'Pending'}</small></div></div>})}</div>
-  <p className="notice">Frozen case interval {detail.case.analysis_sequence+1}. Playback is locked during review. Return to Network overview to change time.</p><h3>Case assignment</h3><label className="field-label">Owner (fictional demo identity)<input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="Explicitly unassigned"/></label><button className="secondary full" disabled={busy||!['analyst','supervisor'].includes(actor)} onClick={()=>perform(()=>patchCase(undefined,{assigned_to:owner}))}><UserRound size={15}/>Save assignment</button><p className="micro">Assignment: analyst or supervisor identity.</p>
-  <button className="text-button" disabled={busy} onClick={()=>perform(async()=>{await refreshDetail(detail.case.id);await refreshCases();setNotice('Case refreshed. Your note draft is kept.')})}>Refresh case</button><small className="run-reference">Run {detail.case.run_id}<br/>Revision {detail.case.revision} · {pretty(detail.case.state)}</small>
- </>:<div className="empty"><FileText/><h3>No case selected</h3><p>Open a persistent anomaly from the network overview, or select an existing case from the archive.</p><button onClick={()=>setScreen('network')}>Return to network</button></div>}
- </aside>
 
- <section className="center-panel">
- {screen==='inspection'&&detail&&<MissionBrief area={detail.case.boundary_asset_id} state={detail.case.state} actor={actor} busy={busy} progress={missionProgress} telemetry={flightStats} captures={detail.evidence.length} view={inspectionView} onView={setInspectionView} ready={sceneReady} interrupted={detail.missions.some(m=>!['completed','cancelled'].includes(m.status))} onRestart={()=>{const m=detail.missions.find(m=>!['completed','cancelled'].includes(m.status));if(m)perform(()=>runMission(m))}} onLaunch={approve} onTriage={()=>perform(()=>patchCase('triaged'))} onReviewer={()=>{setActor('reviewer');setNotice('Demo reviewer selected. Review the target, then approve and launch.')}} onResume={()=>perform(()=>patchCase('under_review'))}/>}
- {screen==='network'?<div className="scene-heading"><div><span className="eyebrow"><span className="live-dot"/>DISTRIBUTION OPERATIONS</span><h1>See the network.<br/>Follow the evidence.</h1><p>{activeAlerts.length?`${activeAlerts.length} persistent anomaly${activeAlerts.length===1?'':'s'} to review`:'38 meter streams · one connected view'}</p></div><button className="scene-investigate" disabled={busy} onClick={()=>setAnalysisContext({snapshot:s,area:boundary!})}><Activity size={15}/>Investigate {asset.label}</button></div>:detail&&<div className="evidence-toolbar"><div className="segmented"><button className={!annotated?'selected':''} onClick={()=>setAnnotated(false)}>Original</button><button className={annotated?'selected':''} onClick={()=>setAnnotated(true)}>Annotated</button></div><button className={'text-button '+(compare?'cyan-text':'')} onClick={()=>setCompare(v=>!v)}>Compare side by side</button><span className="badge">RGB · simulated</span></div>}
- <div className={screen==='inspection'?'inspection-main'+(inspectionView==='evidence'&&!missionProgress?' show-evidence':''):'scene-main'}>
-  {screen==='inspection'&&<div className="evidence-display">
-   {selectedEvidence?<><div className="capture-view-controls"><button aria-pressed={!annotated} onClick={()=>setAnnotated(false)}>Original</button><button aria-pressed={annotated} onClick={()=>setAnnotated(true)}>Annotated</button><button aria-pressed={compare} onClick={()=>setCompare(v=>!v)}>Compare</button></div><div className={'image-pair '+(compare?'compare':'')}>
-    {compare&&<figure><img src={selectedEvidence.original_image_path} alt="Original RGB scene capture" style={{transform:`scale(${imageZoom})`}}/><figcaption>Original RGB · simulated</figcaption></figure>}
-    <figure><img src={annotated&&selectedEvidence.annotated_image_path?selectedEvidence.annotated_image_path:selectedEvidence.original_image_path} alt={annotated&&selectedEvidence.annotated_image_path?'Image-based candidate detection annotation':'Original RGB scene capture'} style={{transform:`scale(${imageZoom})`}}/><figcaption>{selectedEvidence.processing_error?'Processing failed · original retained':annotated?'OpenCV pixel analysis':'Original RGB'} · {selectedEvidence.detector_version}</figcaption></figure>
-   </div><div className="image-stamp">RGB · SYNTHETIC<br/>{date(selectedEvidence.captured_sim_time)} IST<br/>Local camera [{selectedEvidence.camera_pose.position.map(v=>v.toFixed(1)).join(', ')}] m</div><div className="image-controls"><button aria-label="Zoom out evidence" onClick={()=>setImageZoom(v=>Math.max(1,v-.25))}><ZoomOut size={17}/></button><span>{imageZoom.toFixed(1)}×</span><button aria-label="Zoom in evidence" onClick={()=>setImageZoom(v=>Math.min(3,v+.25))}><ZoomIn size={17}/></button><button aria-label="Reset evidence zoom" onClick={()=>setImageZoom(1)}><Maximize2 size={17}/></button></div></>:<div className="evidence-empty"><Camera size={34}/><h2>{missionProgress||'Ready for aerial inspection'}</h2><p>Approve a simulated flight to capture two overhead views, or continue human review without visual evidence.</p><small>Worker results remain available through the activity icon. Exports include the matching investigation and its trace.</small></div>}
-  </div>}
-  <div className={'scene-wrap '+(screen==='inspection'?'inspection-scene':'')}>
-   {screen==='inspection'&&<h3><Navigation size={14}/>GT–01 · Inspection drone <span className="muted">{missionProgress?reduced?'Reduced motion · waypoint updates':'Camera following drone':'Orbit to explore the target'}</span></h3>}
-   <SceneBoundary onUnavailable={()=>setSceneReady(false)}><Suspense fallback={<div className="scene-error" role="status"><Activity/><h3>Loading network scene…</h3><p>Asset navigation and case review are available.</p></div>}><Scene snapshot={s} selected={selected} onSelect={select} handle={scene} onFps={setFps} reviewedIds={cases.filter(c=>c.run_id===s.run.id&&!['resolved','dismissed'].includes(c.state)).map(c=>c.boundary_asset_id)} reduced={reduced} inspection={screen==='inspection'} paused={screen==='inspection'&&inspectionView==='evidence'&&!missionProgress} onUnavailable={()=>setSceneReady(false)} onFlightProgress={setFlightStats} onReady={()=>setSceneReady(true)}/></Suspense></SceneBoundary>
-   {screen==='inspection'&&<div className="mission-hud"><span><small>DRONE</small><strong>GT-01</strong></span><span><small>ALTITUDE - SIMULATED</small><strong>{flightStats?flightStats.position[1].toFixed(1)+' m':'12-14 m'}</strong></span><span><small>ROUTE</small><strong>{flightStats?'Waypoint '+flightStats.waypoint+' / 3':'3 waypoints'}</strong></span><span><small>CAPTURE PLAN</small><strong>2 RGB views</strong></span></div>}
-   <div className="scene-tools"><button disabled={!!missionProgress} aria-label="Focus selected asset" title="Focus selected asset" onClick={()=>scene.current?.focus()}><Focus size={17}/></button><button disabled={!!missionProgress} aria-label="Reset camera" title="Reset camera" onClick={()=>scene.current?.reset()}><RotateCcw size={17}/></button></div>
-   <div className="scene-legend"><span><i/>Network</span><span><i className="violet"/>Selected</span><span><i className="amber"/>Unexplained</span><small>{fps} FPS</small></div>
-   {screen==='network'&&<div className="scene-hint">Drag to orbit · Right-drag to pan · Scroll to zoom <span>Flow is illustrative</span></div>}
+ {!s||!asset?<main className="loading"><Activity/><h2>Connecting to Grid Trace</h2><p>Loading network...</p><button onClick={()=>location.reload()}>Retry connection</button></main>:(
+  <div className="cockpit-grid-container">
+   <LeftHierarchyPanel
+    snapshot={s}
+    selected={selected}
+    onSelect={select}
+    disabled={busy||flying.current}
+   />
+
+   <main className="zone-c-center">
+    <div className="zone-c-floating-hud">
+     <button className="hud-pill asset-badge" onClick={()=>setNavigator(true)} title="Asset Explorer — click to browse all assets">
+      <span className="live-dot"/>
+      <strong>{asset.label}</strong>
+      <small>{asset.parent_id?pretty(asset.parent_id):'Root Feeder'}</small>
+     </button>
+     {balance&&<div className={'hud-pill metric-badge '+(balance.qualifies?'amber':'')}>
+      {balance.qualifies&&<TriangleAlert size={11}/>}
+      <span>Residual:</span>
+      <strong>{n(balance.residual_kwh)} kWh</strong>
+      <small>({pct(balance.residual_ratio)})</small>
+     </div>}
+     {alert&&<div className="hud-pill alert-badge">
+      <TriangleAlert size={11}/>
+      <strong>ALERT</strong>
+      <small>{n(alert.unexplained_kwh)} kWh unaccounted</small>
+     </div>}
+
+    </div>
+
+    <div className="scene-wrap">
+     <SceneBoundary onUnavailable={()=>setSceneReady(false)}>
+      <Suspense fallback={<div className="scene-error" role="status"><Activity/><h3>Loading 3D Twin...</h3></div>}>
+       <Scene
+        key={s.run.id}
+        snapshot={s}
+        selected={selected}
+        onSelect={select}
+        handle={scene}
+        onFps={setFps}
+        reviewedIds={cases.filter(c=>c.run_id===s.run.id&&!['resolved','dismissed'].includes(c.state)).map(c=>c.boundary_asset_id)}
+        reduced={reduced}
+        inspection={screen==='inspection'}
+        paused={comparisonOpen}
+        rotating={rotating}
+        motion={motion}
+        onManualCamera={()=>setRotating(false)}
+        onUnavailable={()=>setSceneReady(false)}
+        onFlightProgress={setFlightStats}
+        onReady={()=>setSceneReady(true)}
+       />
+      </Suspense>
+     </SceneBoundary>
+
+     <div className="scene-tools">
+      <button disabled={busy} aria-label="Focus selected asset" title="Focus selected asset" onClick={()=>{setRotating(false);scene.current?.focus()}}><Focus size={17}/></button>
+      <button disabled={busy} aria-label="Reset camera" title="Reset camera" onClick={()=>{setRotating(false);scene.current?.reset()}}><RotateCcw size={17}/></button>
+      {sceneReady&&<button disabled={busy} aria-label="Search assets" title="Search assets" onClick={()=>setNavigator(true)}><Search size={16}/></button>}
+     </div>
+
+     <div className="scene-legend">
+      <span><i/>Network</span>
+      <span><i className="blue-legend"/>Selected</span>
+      <span><i className="amber"/>Alert</span>
+      <small className={fps<30&&fps>0?'fps-warn':''}>{fps} FPS</small>
+     </div>
+     <div className="presentation-scene-tools" aria-label="Presentation controls">
+      <button disabled={!sceneReady||busy||reduced||screen==='inspection'} aria-pressed={rotating&&!reduced&&screen!=='inspection'} onClick={()=>{if(!rotating)scene.current?.reset();setRotating(!rotating)}} title={reduced?'Rotation is off for reduced motion':'Slowly orbit the network; dragging stops rotation'}><RotateCcw size={15}/>{rotating?'Stop rotation':'Rotate POV'}</button>
+      <button disabled={reduced} aria-pressed={motion&&!reduced} onClick={()=>{if(motion)setRotating(false);setMotion(!motion)}}>{motion&&!reduced?<Pause size={15}/>:<Play size={15}/>}Scene motion {motion&&!reduced?'on':'off'}</button>
+      <button disabled={!sceneReady||(!tourActive&&(busy||screen==='inspection'))} onClick={()=>tourActive?scene.current?.cancelTour():previewDrone()}><Navigation size={15}/>{tourActive?'End drone tour':'Drone tour'}</button>
+     </div>
+     {tourActive&&<div className="drone-tour-status" role="status"><strong>DRONE TOUR / {Math.round((flightStats?.progress||0)*100)}%</strong><span>Presentation preview · no evidence captured</span><progress max={1} value={flightStats?.progress||0}/></div>}
+    </div>
+
+    <PiPDroneHUD
+     active={flying.current&&!tourActive}
+     completed={droneCompleted}
+     flightStats={flightStats}
+     evidence={detail?.evidence.at(-1)}
+     onClose={()=>setDroneCompleted(false)}
+    />
+   </main>
+
+   <RightPipelinePanel snapshot={s} selected={selected} actor={actor} busy={busy||flying.current}
+    detail={screen==='inspection'?detail:null} cases={cases} note={note}
+    onNote={value=>{setNote(value);if(detail)sessionStore.setItem('gridtrace-note-'+detail.case.id,value)}}
+    onInvestigate={()=>{if(boundary)setAnalysisContext({snapshot:s,area:boundary})}}
+    onOpenCase={createCase} onResumeCase={c=>perform(()=>openCase(c))}
+    onTransition={state=>perform(()=>patchCase(state))} onGround={()=>setGroundOpen(true)}
+    onLaunchDrone={approve} onResumeMission={m=>perform(()=>runMission(m))} onExportReport={exportReport} onSetActor={setActor}
+    onSaveNote={()=>perform(()=>patchCase(undefined,{note}))}
+    disposition={disposition} dispositions={dispositions} onDisposition={setDisposition}
+    onCloseCase={()=>{setScreen('network');setDetail(null);setSelectedCase(null);setDroneCompleted(false);pinnedSequence.current=null;loadRun(s.run.id,null).catch(e=>setError(e.message))}}
+    canFly={!!openQuestion&&openQuestion.visibility!=='clear'&&!!detail&&['ground_review','inspection_requested','evidence_ready','under_review'].includes(detail.case.state)} sceneReady={sceneReady}
+   />
   </div>
-  {screen==='inspection'&&<div className="capture-panel" role="region" aria-label="Evidence captures" tabIndex={0}><h3>Evidence captures <span className="muted">({detail?.evidence.length||0})</span></h3><div className="thumbnails">{detail?.evidence.map((e,i)=><button className={selectedEvidence?.id===e.id?'selected':''} key={e.id} onClick={()=>{setEvidenceId(e.id);setImageZoom(1);setInspectionView('evidence')}}><img src={e.annotated_image_path||e.original_image_path} alt={`Capture ${i+1} preview`}/><strong>IMG-{String(i+1).padStart(3,'0')}</strong><small>{date(e.captured_sim_time,true)} IST</small><small>RGB · simulated</small></button>)}{!detail?.evidence.length&&<p className="empty">Scene captures will appear here.</p>}</div></div>}
- </div>
- </section>
+ )}
 
- <aside className="right-panel scroll">
- {screen==='network'?<>
-  {s.run.mode==='replay'&&<MonthReplay snapshot={s} busy={busy||flying.current} onSeek={sequence=>control('seek',undefined,sequence)}/> }
-  <h2>Investigation queue <span className="count">{activeAlerts.length}</span></h2><div className="segmented full"><button className={queueTab==='alerts'?'selected':''} onClick={()=>setQueueTab('alerts')}>Alerts {activeAlerts.length}</button><button className={queueTab==='cases'?'selected':''} onClick={()=>setQueueTab('cases')}>Cases {cases.length}</button></div>
-  <div className="queue">{queueTab==='alerts'?<>{activeAlerts.map(a=><button key={a.id} className={'queue-item '+(a.boundary_asset_id===boundary?'selected':'')} onClick={()=>select(a.boundary_asset_id)}><GitBranch className="violet-text"/><div><strong>{pretty(a.boundary_asset_id)}<span className="badge amber">Review</span></strong><p>Persistent unexplained loss</p><small>{a.consecutive_intervals} intervals · <b>{pct(a.residual_ratio)}</b> residual</small></div></button>)}{s.quality_events.map(q=><button key={q.asset_id} className="queue-item quality-item" onClick={()=>select(q.asset_id)}><TriangleAlert/><div><strong>{pretty(q.asset_id)}</strong><p>Data-quality review</p><small>{q.reason}</small></div></button>)}{!activeAlerts.length&&!s.quality_events.length&&<div className="queue-empty"><ShieldCheck/><strong>No persistent anomalies</strong><p>{balance?.qualifies?'Residual observed. Waiting for three valid intervals.':'All monitored sections are within the configured thresholds.'}</p><button className="text-button" onClick={()=>setPresenter(true)}>Open scenario controls</button></div>}</>:<>{cases.map(c=><button key={c.id} className="queue-item" onClick={()=>perform(()=>openCase(c))}><FileText/><div><strong>{pretty(c.boundary_asset_id)}</strong><p>{pretty(c.state)}</p><small>{c.assigned_to||'Unassigned'} · {c.id.slice(-6)}</small></div><ChevronRight size={14}/></button>)}{!cases.length&&<p className="empty">No cases yet. Open a case from a persistent anomaly.</p>}</>}</div>
-  <h3>Details · {asset.label}</h3><dl className="asset-details"><dt>Asset type</dt><dd>{pretty(asset.kind)}</dd><dt>Stable ID</dt><dd>{asset.id}</dd><dt>From</dt><dd>{asset.parent_id?pretty(asset.parent_id):'Network source'}</dd><dt>Downstream</dt><dd>{children.length} metered assets</dd><dt>Energy</dt><dd>{n(s.readings[selected]?.energy_import_kwh)} kWh</dd><dt>Quality</dt><dd>{s.readings[selected]?.quality||'No meter'}</dd><dt>Residual</dt><dd className={balance?.qualifies?'amber-text':''}>{pct(balance?.residual_ratio)}</dd><dt>Status</dt><dd>{balance?.validity==='insufficient_observability'?'⃠ Not instrumented':balance?.validity!=='valid'?'⚠ Data incomplete':alert?'△ Persistent anomaly':balance.qualifies?'◷ Persistence pending':'✓ Within threshold'}</dd></dl>
-  {alert&&<><p className="localization">Branch-level localization; household unresolved.</p><button className="primary full" onClick={createCase} disabled={busy}><FileText size={16}/>Open case review<ArrowRight size={16}/></button></>}
-  {boundary&&<ActionsPanel runId={s.run.id} boundaryId={boundary} caseId={selectedCase} sequence={s.seq}/>}
-  <button className="secondary full" onClick={()=>setNavigator(true)}><GitBranch size={16}/>View connected assets</button>
-  <h3 className="space-top">Observed meter streams</h3><div className="meter-list">{(asset.kind==='household'?[asset]:children).map(a=><button key={a.id} onClick={()=>select(a.id)}><span>{a.label}<small>{a.meter_id}</small></span><strong>{n(s.readings[a.id]?.energy_import_kwh)}<small>{s.readings[a.id]?.quality==='valid'?'kWh':s.readings[a.id]?.quality}</small></strong></button>)}</div>
-  {asset.kind==='household'&&<button className="text-button" disabled={busy||s.run.playing||s.run.mode==='replay'} onClick={()=>setCorrection({aid:asset.id,sequence:s.seq,revision:s.readings[asset.id].revision,value:s.readings[asset.id].energy_import_kwh?.toString()||''})}>Revise / restore this observed reading</button>}
-  {alert?.candidate_meter_ids.length?<p className="notice">Consumption change watchlist: {alert.candidate_meter_ids.join(', ')}. Below 50% of own seven-day same-time baseline for three intervals. Small baseline sample; fault or legitimate behavior remains possible.</p>:null}
-  <p className="micro">Unexplained energy is an investigation signal. It is never a finding of theft.</p>
- </>:detail?<>
-  <h2>Case review</h2>{detail.case.decision_reason&&<section className="saved-decision"><h3>Saved review · {pretty(detail.case.state)}</h3><p>{detail.case.decision_reason}</p><small>Disposition: {detail.case.disposition||'Not set'}</small></section>}<p className="notice">{detail.case.state==='open'?'Next: Demo analyst or supervisor must triage this case.':detail.case.state==='field_check_required'?'Field verification is pending. Resume review after recording new evidence, or export the current report.':missionProgress?'Inspection is running. The case interval is locked until capture finishes.':detail.case.state==='inspection_requested'?'Restart the paused inspection from the mission controls, or cancel it below.':detail.case.state==='evidence_ready'?'Captures are ready. Begin human review to record a disposition and next action.':detail.case.state==='triaged'?'Approve a simulated flight above, or continue human review without images.':detail.case.state==='under_review'?'Next: record a reason and save a review. Resolving or dismissing requires Demo supervisor.':'Review saved. Export the report or return to the case archive.'}</p><div className={'finding '+(selectedEvidence?.observation_status==='candidate_found'?'candidate':'')}><GitBranch/><div><h3>{selectedEvidence?pretty(selectedEvidence.observation_status):missionProgress?'Inspection in progress':'No visual capture yet'}</h3><p>{selectedEvidence?.observation_status==='candidate_found'?'Candidate extra overhead connection visible.':selectedEvidence?.observation_status==='no_visible_candidate'?'No unmatched visible line found in this controlled view.':selectedEvidence?'Image geometry or contrast could not support a reliable observation.':missionProgress?'The drone is following the approved inspection plan. Captures appear after processing.':'Launch an approved flight from the mission view, or continue human review without images.'}</p></div><span className="badge violet">RGB observation</span><span className="badge amber">Field verification required</span></div>
-  <div className="notice"><TriangleAlert size={18}/><div><strong>Authorization and energization unverified.</strong><p>RGB cannot establish ownership, billing authorization or current. A negative image does not clear the energy imbalance.</p></div></div>
-  {selectedEvidence&&<div className="provenance"><h3><Camera size={17}/>Original frame</h3><small>{selectedEvidence.id}</small><p>{date(selectedEvidence.captured_wall_time)} IST<br/>640 × 480 · RGB · simulated</p><strong className="cyan-text"><ShieldCheck size={15}/>SHA-256 stored</strong><code title={selectedEvidence.original_sha256}>{selectedEvidence.original_sha256}</code><small>{selectedEvidence.detector_version} · {n(selectedEvidence.processing_ms,0)} ms</small>{selectedEvidence.processing_error?<p className="amber-text">Processing failed. No inference produced; retry the mission or continue without visual evidence.</p>:<p>{selectedEvidence.observations.length} candidate region(s). Geometric match score: {selectedEvidence.observations.length?selectedEvidence.observations.map(o=>n(o.geometric_match_score,2)).join(', '):'n/a'}; no theft probability.</p>}<div className="download-row"><a href={selectedEvidence.original_image_path} download><Download size={13}/>Original PNG</a>{selectedEvidence.annotated_image_path&&<a href={selectedEvidence.annotated_image_path} download><Download size={13}/>Annotated PNG</a>}</div></div>}
-  <div className="mission-actions">{detail.case.state==='open'&&<button className="primary full" disabled={busy||!['analyst','supervisor'].includes(actor)} onClick={()=>perform(()=>patchCase('triaged'))}><Check size={17}/>Triage case</button>}
-  <section className="ground-review">
-   <h3>Ground review <span className="muted">{detail.ground?.length||0} recorded</span></h3>
-   <p className="micro">Aerial inspection is optional and targeted. It is approved only to answer a specific overhead question that a ground view could not resolve.</p>
-   {detail.ground?.map(g=><div key={g.id} className={'ground-entry '+(g.resolved_from_ground?'resolved':'open')}>
-    <strong>{g.resolved_from_ground?'Resolved from ground':'Outstanding question'}</strong>
-    <p>{g.resolved_from_ground?'The ground observation answered the question. No flight is required.':g.outstanding_question}</p>
-    <small>{pretty(g.access)} access · {pretty(g.visibility)} visibility · {g.recorded_by} · {date(g.recorded_at,true)}</small>
-   </div>)}
-   {!['resolved','dismissed'].includes(detail.case.state)&&<>
-    {groundOpen?<div className="ground-form">
-     <label className="field-label">Access<select value={groundAccess} onChange={e=>setGroundAccess(e.target.value)}>{['obtained','refused','unsafe','not_attempted'].map(v=><option key={v} value={v}>{pretty(v)}</option>)}</select></label>
-     <label className="field-label">Visibility from ground<select value={groundVisibility} onChange={e=>setGroundVisibility(e.target.value)}>{['clear','partial','obstructed','not_visible'].map(v=><option key={v} value={v}>{pretty(v)}</option>)}</select></label>
-     <label className="field-label ground-check"><input type="checkbox" checked={groundResolved} onChange={e=>setGroundResolved(e.target.checked)}/> The ground observation answered the question</label>
-     {!groundResolved&&<label className="field-label">Exact question the ground view could not answer<textarea rows={2} maxLength={600} value={groundQuestion} onChange={e=>setGroundQuestion(e.target.value)} placeholder="For example: is there an unmatched span above the pole, screened from the footpath?"/></label>}
-     <div className="ground-actions"><button className="primary" disabled={busy} onClick={recordGround}>Record ground observation</button><button className="text-button" onClick={()=>setGroundOpen(false)}>Cancel</button></div>
-    </div>:<button className="secondary full" disabled={busy||!['triaged','ground_review','inspection_requested','evidence_ready','under_review','field_check_required'].includes(detail.case.state)} onClick={()=>setGroundOpen(true)}>Record a ground observation</button>}
-   </>}
-   {openQuestion&&<p className="micro cyan-text">An aerial viewpoint is now justified for: {openQuestion.outstanding_question}</p>}
-   {groundResolvedLatest&&!openQuestion&&<p className="micro">Resolved from ground. Continue human review without a flight.</p>}
-  </section>
-  {['triaged','inspection_requested','evidence_ready','under_review'].includes(detail.case.state)&&<><p className="micro">Target {detail.case.boundary_asset_id} and its pole. Two overhead RGB views. Simulated route; controlled-view detector only. Requires reviewer or supervisor identity.</p><p className="micro">Approve and launch from the mission controls above the live view.</p></>}
-  {detail.missions.filter(m=>!['completed','cancelled'].includes(m.status)).map(m=><div key={m.id} className="mission-status"><small>{m.id.slice(-6)} · {m.status}</small>{m.failure_reason&&<p>{m.failure_reason}</p>}{!flying.current&&<button className="text-button" disabled={busy||!['reviewer','supervisor'].includes(actor)} onClick={()=>perform(async()=>{await api('/missions/'+m.id,'PATCH',{status:'cancelled',reason:note||'Reviewer cancelled mission; manual/field review will continue.'},actor);await refreshDetail(detail.case.id)})}>Cancel mission</button>}</div>)}
-  {missionProgress&&<div className="progress" role="status"><Activity size={17}/>{missionProgress}</div>}
-  {['triaged','inspection_requested','evidence_ready','field_check_required'].includes(detail.case.state)&&<button className="secondary full" disabled={busy||!['reviewer','supervisor'].includes(actor)} onClick={()=>perform(()=>patchCase('under_review'))}>{detail.case.state==='field_check_required'?'Resume human review':detail.evidence.length?'Begin human review':'Continue without visual evidence'}</button>}
-  </div>
-  <label className="field-label">Reviewer note / decision reason<textarea value={note} onChange={e=>{setNote(e.target.value);sessionStore.setItem('gridtrace-note-'+detail.case.id,e.target.value)}} maxLength={4000} placeholder="Record observations, uncertainty and the next action…" rows={3}/></label>{note&&<p className="micro">Unsaved note draft is kept in this browser tab. <button className="text-button" onClick={()=>{setNote('');sessionStore.removeItem('gridtrace-note-'+detail.case.id)}}>Discard note draft</button></p>}<button className="text-button save-note" disabled={busy||!note.trim()} onClick={()=>perform(()=>patchCase(undefined,{note}))}>Save note</button>
-  {detail.case.state==='under_review'&&<><label className="field-label">Disposition<select value={disposition} onChange={e=>setDisposition(e.target.value)}>{dispositions.map(d=><option key={d}>{d}</option>)}</select></label><label className="field-label">Review outcome<select value={review} onChange={e=>setReview(e.target.value)}><option value="field_check_required">Request field inspection</option><option value="resolved">Resolve case (supervisor)</option><option value="dismissed">Dismiss case (supervisor)</option></select></label><button className="primary cyan-button full" disabled={busy||!note.trim()||!(review==='field_check_required'?['reviewer','supervisor']:['supervisor']).includes(actor)} onClick={()=>perform(()=>patchCase(review))}>Save review<ArrowRight size={17}/></button></>}
-  {['resolved','dismissed'].includes(detail.case.state)&&<button className="secondary full" disabled={busy||actor!=='supervisor'} onClick={()=>perform(()=>patchCase('reopened'))}>Reopen case (supervisor)</button>}
-  {detail.case.state==='reopened'&&<button className="secondary full" onClick={()=>perform(()=>patchCase('triaged'))}>Triage reopened case</button>}
-  <div className="export-row"><button className="secondary" disabled={busy} onClick={()=>perform(()=>exportReport('json'))}><Download size={15}/>Export JSON</button><button className="secondary" disabled={busy} onClick={()=>perform(()=>exportReport('md'))}>Markdown</button></div>
-  <h3 className="space-top">Audit trail <span className="muted">{detail.audit.length} events</span></h3><div className="audit">{[...detail.audit].reverse().map(a=><div key={a.id}><i/><strong>{a.actor_id}</strong><span>{pretty(a.action)}<small>{a.reason||`${a.from_state||'Created'} → ${a.to_state}`}</small></span><time title={date(a.wall_timestamp)}>{date(a.wall_timestamp,true)}</time></div>)}</div>
- </>:<div className="empty">Select a case to inspect evidence and record a review.</div>}
- </aside>
- </main>
- <footer className="playback"><button className="play-button" aria-label={s.run.playing?'Pause simulation':'Play simulation'} disabled={screen==='inspection'||busy||flying.current||s.seq>=(s.run.interval_count||96)-1} onClick={()=>control(s.run.playing?'pause':'play')}>{s.run.playing?<Pause size={21}/>:<Play size={21}/>}</button><select aria-label="Playback speed" disabled={screen==='inspection'||busy} value={s.run.speed} onChange={e=>control('speed',+e.target.value)}><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><button aria-label="Step one interval" title="Step one 15-minute interval" disabled={screen==='inspection'||busy||s.run.playing||flying.current||s.seq>=(s.run.interval_count||96)-1} onClick={()=>control('step')}><SkipForward size={17}/><span className="step-label">Step interval</span></button><div className="sim-clock"><strong>{date(s.readings['feeder-01'].interval_start)}</strong><small>Asia/Kolkata · interval start</small></div><span className="live-state"><i/>{connection}</span><div className="timeline"><input key={s.seq} type="range" aria-label="Replay interval" min={0} max={s.run.mode==='replay'?(s.run.interval_count||2880)-1:s.run.seq} defaultValue={s.seq} disabled={screen==='inspection'||busy||flying.current} onPointerUp={e=>control('seek',undefined,Number(e.currentTarget.value))} onKeyUp={e=>{if(['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key))control('seek',undefined,Number(e.currentTarget.value))}}/><div className="timeline-labels"><span>1 Sep</span><span>{s.run.mode==='replay'?'September 2022 · development fixture':'Scenario laboratory'}</span><span>{s.run.mode==='replay'?'30 Sep':'1 Sep'}</span></div></div><span className="sequence">{s.seq+1} / {s.run.interval_count||96}<small>15 min / interval</small></span>{!!profiles.length&&<label className="coverage-switch"><span>Coverage</span><select aria-label="Metering coverage profile" title={profiles.find(c=>c.id===(s.run.coverage_profile||'full_sectional'))?.reference||''} disabled={busy||flying.current||actor!=='presenter'} value={s.run.coverage_profile||'full_sectional'} onChange={e=>switchCoverage(e.target.value)}>{profiles.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>{actor!=='presenter'&&<small>presenter only</small>}</label>}<button className="reset-run" disabled={busy} onClick={()=>setPresenter(true)} title="Start a new run"><FlaskConical size={15}/>Scenarios</button></footer>
- </>}
+ <EvaluationDrawer
+  open={evalDrawerOpen}
+  onToggle={()=>setEvalDrawerOpen(!evalDrawerOpen)}
+ />
+ {comparisonOpen&&<ComparisonPanel reduced={reduced} onClose={()=>setComparisonOpen(false)}/>}
 
+ {groundOpen&&detail&&<div className="modal-backdrop"><section className="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="ground-title"><div className="drawer-heading"><h2 id="ground-title">Ground observation</h2><button aria-label="Close ground observation" onClick={()=>setGroundOpen(false)}><X size={18}/></button></div><label>Access<select value={groundAccess} onChange={e=>setGroundAccess(e.target.value)}><option value="obtained">Obtained</option><option value="refused">Refused</option><option value="unsafe">Unsafe</option><option value="not_attempted">Not attempted</option></select></label><label>Visibility<select value={groundVisibility} onChange={e=>setGroundVisibility(e.target.value)}><option value="obstructed">Obstructed</option><option value="partial">Partial</option><option value="clear">Clear</option><option value="not_visible">Not visible</option></select></label><label className="check-row"><input type="checkbox" checked={groundResolved} onChange={e=>setGroundResolved(e.target.checked)}/>Question resolved from ground</label>{!groundResolved&&<label>Unanswered question<textarea rows={3} placeholder="Which overhead connection needs a closer view?" value={groundQuestion} onChange={e=>setGroundQuestion(e.target.value)}/></label>}<button className="primary full" disabled={busy||!groundResolved&&!groundQuestion.trim()} onClick={recordGround}>Save observation</button></section></div>}
  {navigator&&s&&<div className="navigator" role="dialog" aria-label="Asset navigator"><div className="drawer-heading"><h2>Asset navigator</h2><button aria-label="Close asset navigator" onClick={()=>setNavigator(false)}><X size={18}/></button></div><p className="micro">Keyboard and text alternative to 3D picking. Parent → section → meters.</p><input autoFocus aria-label="Filter asset list" placeholder="Filter by ID or label…" value={search} onChange={e=>setSearch(e.target.value)}/><div className="navigator-list">{s.assets.filter(a=>a.meter_id&&(`${a.id} ${a.label}`.toLowerCase().includes(search.toLowerCase()))).map(a=><button key={a.id} className={selected===a.id?'selected':''} onClick={()=>select(a.id)} style={{paddingLeft:12+(['feeder','transformer','branch','household'].indexOf(a.kind))*10}}><Icon kind={a.kind}/><span>{a.label}<small>{a.id} · {s.readings[a.id]?.quality}</small></span><ChevronRight size={13}/></button>)}</div></div>}
- {presenter&&s&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="drawer-heading"><h2 id="scenario-title"><FlaskConical size={20}/>Simulation laboratory</h2><button aria-label="Close scenario controls" onClick={()=>setPresenter(false)}><X size={19}/></button></div><p>All development readings are synthetic. The original BESCOM extract and frozen month file will be onboarded later.</p><button className="primary full" disabled={busy||flying.current} onClick={startMonth}>Open September 2022 replay</button><hr/><h3>Scenario laboratory</h3><p className="scenario-selection">Next run: <strong>{pretty(scenario)}</strong></p><p>Choose the scenario below, then start it. Existing cases and evidence are preserved.</p><div className="form-grid"><label>Seed<input type="number" min={0} max={1000000} value={seed} onChange={e=>setSeed(+e.target.value)}/></label><label>Scenario<select value={scenario} onChange={e=>setScenario(e.target.value)}>{scenarios.map(c=><option value={c} key={c}>{pretty(c)}</option>)}</select></label>{!!profiles.length&&<label>Metering coverage<select value={coverageProfile} onChange={e=>setCoverageProfile(e.target.value)}>{profiles.map(c=><option value={c.id} key={c.id}>{c.label}</option>)}</select></label>}</div>{!!profiles.length&&<p className="micro">{profiles.find(c=>c.id===coverageProfile)?.note}<br/><em>{profiles.find(c=>c.id===coverageProfile)?.reference}</em></p>}<button className="primary full" disabled={busy||flying.current} onClick={()=>perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed,scenario,mode:'laboratory',coverage_profile:coverageProfile});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setScreen('network');setPresenter(false);const b=await api('/bootstrap');setRuns(b.runs);setTruth(null)})}>Start selected scenario<ArrowRight size={16}/></button><p className="micro">Scenario starts at interval 1 and ends at 80. Visible/hidden load: 1.2 kWh per interval. Under-registration: 85%. Missing data remains null.</p><hr/><h3>Inject into this run</h3>{s.run.mode==='replay'&&<p role="status">Replay is read-only. Start a laboratory run to inject incidents.</p>}<p className="micro">Requires the Demo presenter identity. Private incident settings are excluded from analyst snapshots.</p><label>Target branch<select value={target} onChange={e=>setTarget(e.target.value)}>{s.assets.filter(a=>a.kind==='branch').map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></label><div className="form-grid"><label>Start interval<input type="number" min={s.seq+1} max={(s.run.interval_count||96)-1} value={start} onChange={e=>setStart(+e.target.value)}/></label><label>End (exclusive)<input type="number" min={1} max={s.run.interval_count||96} value={end} onChange={e=>setEnd(+e.target.value)}/></label><label>Severity (kWh / multiplier)<input type="number" step=".1" min=".1" max="20" value={severity} onChange={e=>setSeverity(+e.target.value)}/></label></div><button className="secondary full" disabled={busy||scenario==='clean'||s.run.mode==='replay'} onClick={()=>perform(async()=>{await api(`/runs/${s.run.id}/incidents`,'POST',{type:scenario,target_asset_id:target,start,end,severity},actor);setPresenter(false)})}>Inject selected scenario</button><button disabled={s.run.mode==='replay'} className="text-button" onClick={()=>perform(async()=>setTruth(await api(`/runs/${s.run.id}/truth`,'GET',undefined,actor)))}>Explicitly reveal private simulator truth</button>{truth!==null&&<pre className="truth">{JSON.stringify(truth,null,2)}</pre>}<hr/><label>Saved runs<select value={s.run.id} disabled={flying.current} onChange={e=>perform(async()=>{await loadRun(e.target.value,null);setPresenter(false);setSelectedCase(null);setDetail(null)})}>{runs.map(r=><option key={r.id} value={r.id}>{r.id} · seed {r.seed} · interval {r.seq+1}</option>)}</select></label></section></div>}
+ {presenter&&s&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="scenario-title"><div className="drawer-heading"><h2 id="scenario-title"><FlaskConical size={20}/>Simulation laboratory</h2><button aria-label="Close scenario controls" onClick={()=>setPresenter(false)}><X size={19}/></button></div><button className="primary full" disabled={busy||flying.current} onClick={startMonth}>Open September 2022 replay</button><hr/><h3>Scenario laboratory</h3><p className="scenario-selection">Next run: <strong>{pretty(scenario)}</strong></p><div className="form-grid"><label>Seed<input type="number" min={0} max={1000000} value={seed} onChange={e=>setSeed(+e.target.value)}/></label><label>Scenario<select value={scenario} onChange={e=>setScenario(e.target.value)}>{scenarios.map(c=><option value={c} key={c}>{pretty(c)}</option>)}</select></label>{!!profiles.length&&<label>Metering coverage<select value={coverageProfile} onChange={e=>setCoverageProfile(e.target.value)}>{profiles.map(c=><option value={c.id} key={c.id}>{c.label}</option>)}</select></label>}</div>{!!profiles.length&&<p className="micro">{profiles.find(c=>c.id===coverageProfile)?.note}<br/><em>{profiles.find(c=>c.id===coverageProfile)?.reference}</em></p>}<button className="primary full" disabled={busy||flying.current} onClick={()=>perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed,scenario,mode:'laboratory',coverage_profile:coverageProfile});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setScreen('network');setPresenter(false);const b=await api('/bootstrap');setRuns(b.runs);setTruth(null)})}>Start selected scenario<ArrowRight size={16}/></button><p className="micro">Scenario starts at interval 1 and ends at 80. Visible/hidden load: 1.2 kWh per interval. Under-registration: 85%. Missing data remains null.</p><hr/><h3>Inject into this run</h3>{s.run.mode==='replay'&&<p role="status">Replay is read-only. Start a laboratory run to inject incidents.</p>}<p className="micro">Requires the Demo presenter identity. Private incident settings are excluded from analyst snapshots.</p><label>Target branch<select value={target} onChange={e=>setTarget(e.target.value)}>{s.assets.filter(a=>a.kind==='branch').map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></label><div className="form-grid"><label>Start interval<input type="number" min={s.seq+1} max={(s.run.interval_count||96)-1} value={start} onChange={e=>setStart(+e.target.value)}/></label><label>End (exclusive)<input type="number" min={1} max={s.run.interval_count||96} value={end} onChange={e=>setEnd(+e.target.value)}/></label><label>Severity (kWh / multiplier)<input type="number" step=".1" min=".1" max="20" value={severity} onChange={e=>setSeverity(+e.target.value)}/></label></div><button className="secondary full" disabled={busy||scenario==='clean'||s.run.mode==='replay'} onClick={()=>perform(async()=>{await api(`/runs/${s.run.id}/incidents`,'POST',{type:scenario,target_asset_id:target,start,end,severity},actor);setPresenter(false)})}>Inject selected scenario</button><button disabled={s.run.mode==='replay'} className="text-button" onClick={()=>perform(async()=>setTruth(await api(`/runs/${s.run.id}/truth`,'GET',undefined,actor)))}>Explicitly reveal private simulator truth</button>{truth!==null&&<pre className="truth">{JSON.stringify(truth,null,2)}</pre>}<hr/><label>Saved runs<select value={s.run.id} disabled={flying.current} onChange={e=>perform(async()=>{await loadRun(e.target.value,null);setPresenter(false);setSelectedCase(null);setDetail(null)})}>{runs.map(r=><option key={r.id} value={r.id}>{r.id} · seed {r.seed} · interval {r.seq+1}</option>)}</select></label></section></div>}
  {help&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Workspace guide"><div className="drawer-heading"><h2>Investigate with Grid Trace</h2><button aria-label="Close guide" onClick={()=>setHelp(false)}><X size={18}/></button></div><ol className="guide"><li>Open the simulation laboratory and start a visible unmetered load scenario.</li><li>Step three times, or play at 10×. The branch alert appears after three valid affected intervals.</li><li>Open an investigation as Demo analyst, assign an owner and triage.</li><li>Open Workers, impact and evaluation. Run W1–W4, inspect evidence and follow-up checks, then open case review.</li><li>Select Demo reviewer and continue without visual evidence. Optional drone/CV can be skipped.</li><li>Begin human review, record a note and request field inspection. Resolve or dismiss using Demo supervisor with a reason and disposition.</li><li>Export JSON/Markdown and original/annotated PNGs. New runs retain old cases.</li></ol><p className="notice">Synthetic-image detection is limited to controlled overhead views. This application does not establish real-world theft or field accuracy.</p><p className="micro">The local identity selector is a simulated role gate, not secure authentication. Bind the application to localhost.</p></section></div>}
  {correction&&s&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Revise observed reading"><div className="drawer-heading"><h2>Revise observed reading</h2><button aria-label="Close reading revision" onClick={()=>setCorrection(null)}><X size={18}/></button></div><p>{correction.aid} · interval {correction.sequence} · current revision {correction.revision}</p><p>This is an explicitly supplied observation, separate from private simulator truth. Earlier observations and analyses are retained. Existing case reports remain frozen.</p><label>Aligned 15-minute energy (kWh)<input autoFocus type="number" min={0} step="0.001" value={correction.value} onChange={e=>setCorrection({...correction,value:e.target.value})}/></label><button className="primary full" disabled={busy||correction.value===''} onClick={()=>perform(async()=>{const next=await api<Snapshot>(`/runs/${s.run.id}/readings/revise`,'POST',{asset_id:correction.aid,sequence:correction.sequence,expected_revision:correction.revision,energy_import_kwh:Number(correction.value),quality:'valid'},actor);setSnapshot(next);setCorrection(null)})}>Save revision and recompute</button><p className="micro">Requires analyst or supervisor identity. Duplicate/stale revisions are rejected.</p></section></div>}
+ {walkthrough&&s&&<WalkthroughModal snapshot={s} detail={detail} cases={cases} actor={actor} screen={screen} onClose={()=>setWalkthrough(false)} onSelectAsset={(id)=>select(id)} onSetActor={(r)=>setActor(r)} onSetScreen={(scr)=>setScreen(scr)} onSetInspectorTab={(tab)=>setInspectorTab(tab)} onDispatchDrone={dispatchDroneInspection} onFocusAsset={()=>scene.current?.focus()} onTriggerScenario={async(sc,se)=>{await perform(async()=>{const next=await api<Snapshot>('/runs','POST',{seed:se,scenario:sc,mode:'laboratory',coverage_profile:coverageProfile});pinnedSequence.current=null;activeRun.current=next.run.id;setSnapshot(next);localStore.setItem('gridtrace-run-v1',next.run.id);setSelectedCase(null);setDetail(null);setScreen('network');const b=await api('/bootstrap');setRuns(b.runs);setTruth(null)})}} onStepSimulation={async(count)=>{for(let i=0;i<count;i++){await control('step')}}} onCreateAndOpenCase={async(area)=>{if(s)await createCaseFor(s,area)}} onRecordGroundReview={async()=>{setGroundVisibility('obstructed');setGroundQuestion('Overhead service tap point not visible from ground road level');setGroundResolved(false);await recordGround()}} onApproveFlight={async()=>{await approve()}} onExportReport={async(format)=>{await exportReport(format)}}/>}
  </div>
 }
 export default App;

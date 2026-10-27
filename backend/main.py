@@ -13,6 +13,7 @@ from .topology import BY_ID,VERSION,ASSETS
 from .sources import manifest, month_summary, MONTH_INTERVALS
 from . import investigations, providers, finance, benchmark
 from .contracts import InvestigationInput, FinanceInput
+from .comparison import ComparisonInput, compare
 
 logging.basicConfig(level=logging.INFO)
 ROLES=['analyst','reviewer','supervisor','presenter']
@@ -171,6 +172,10 @@ async def finance_scenario(body:FinanceInput):
 @app.get('/api/benchmark')
 async def benchmark_results():
     return benchmark.results()
+
+@app.post('/api/comparison')
+async def comparison(body:ComparisonInput):
+    return compare(body)
 
 @app.get('/api/runs/{rid}/month')
 async def month(rid:str):

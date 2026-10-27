@@ -9,3 +9,5 @@ export async function api<T=any>(path:string,method='GET',body?:unknown,actor='a
 export const date=(value:string,short=false)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',...(short?{hour:'2-digit',minute:'2-digit'}:{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),hour12:false}).format(new Date(value));
 export const n=(v:number|null|undefined,d=3)=>v==null?'—':v.toFixed(d);
 export const words=(s:string)=>s.replaceAll('_',' ');
+export const pct=(v:number|null|undefined)=>v==null?'—':(v*100).toFixed(1)+'%';
+export const pretty=(s:string)=>words(s).replace(/^./,c=>c.toUpperCase());

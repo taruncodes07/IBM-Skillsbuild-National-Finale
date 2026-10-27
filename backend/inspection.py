@@ -8,8 +8,11 @@ LIMITS=['Controlled synthetic overhead views only; clutter, occlusion and thin w
 
 def project(points,pose):
     eye=np.array(pose['position'],float); target=np.array(pose['target'],float)
-    forward=target-eye; forward/=np.linalg.norm(forward)
-    right=np.cross(forward,[0,1,0]); right/=np.linalg.norm(right); up=np.cross(right,forward)
+    forward=target-eye
+    fwd_norm=np.linalg.norm(forward); forward/=(fwd_norm if fwd_norm>1e-8 else 1.0)
+    right=np.cross(forward,[0,1,0])
+    right_norm=np.linalg.norm(right); right/=(right_norm if right_norm>1e-8 else 1.0)
+    up=np.cross(right,forward)
     focal=240/math.tan(math.radians(pose['fov'])/2)
     result=[]
     for point in points:
@@ -29,6 +32,9 @@ def detect(image,pose,target_id):
         approved.append(project(c['geometry_points_m'],pose))
     local=[project(c['geometry_points_m'],pose) for c in CONNECTIONS if c['from_asset_id']==target_id]
     # Only the known overhead observation band; no event-dependent crop or mask.
+    if not local:
+        return dict(observation_status='inconclusive',observations=[],parameters={**PARAMETERS,'roi_px':[0,0,640,480]},
+                    detector_version=VERSION,limitations=LIMITS,matched_approved_segments=0),image.copy()
     x0=max(0,int(min(p[0] for line in local for p in line))-55); x1=min(640,int(max(p[0] for line in local for p in line))+100)
     y0=max(0,int(min(p[1] for line in local for p in line))-45); y1=min(480,int(max(p[1] for line in local for p in line))+12)
     roi=np.zeros_like(gray); roi[y0:y1,x0:x1]=255

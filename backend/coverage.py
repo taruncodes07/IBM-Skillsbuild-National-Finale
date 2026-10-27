@@ -67,6 +67,10 @@ def _ordered(assets, kind):
     return sorted(a['id'] for a in assets if a['kind'] == kind and a.get('meter_id'))
 
 
+# Prevents floating-point rounding from dropping the last ID when a fraction
+# multiplied by count is just below an exact integer (e.g. 0.9999999... instead of 1.0).
+_FRACTION_EPSILON = 1e-9
+
 def installed_meters(profile_id, assets):
     """Deterministic installed-meter set for a profile. Same profile, same assets, same set."""
     spec = PROFILES[profile_id]
@@ -75,7 +79,7 @@ def installed_meters(profile_id, assets):
         ids = _ordered(assets, kind)
         if not ids:
             continue
-        count = int(math.floor(len(ids) * spec['fractions'][kind] + 1e-9))
+        count = int(math.floor(len(ids) * spec['fractions'][kind] + _FRACTION_EPSILON))
         installed.update(ids[:count])
     return installed
 

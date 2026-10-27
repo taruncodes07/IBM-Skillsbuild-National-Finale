@@ -1,0 +1,67 @@
+﻿# .bobignore — Context exclusion for IBM Bob
+#
+# Excludes files that should not be read into AI context: credentials,
+# generated outputs, large binaries, dependencies, and temporary files.
+# Source code, tests, sample data, and documentation remain accessible.
+#
+# Format: one glob pattern per line. Lines starting with # are comments.
+# Patterns match relative to the workspace root.
+
+# ── Credentials and local environment ────────────────────────────────────────
+app/.env
+app/.env.*
+!app/.env.example
+
+# ── Python virtual environment and compiled files ─────────────────────────────
+app/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# ── Node dependencies ──────────────────────────────────────────────────────────
+app/node_modules/
+
+# ── Frontend build output ──────────────────────────────────────────────────────
+app/dist/
+
+# ── Runtime databases (generated; preserve data/.gitkeep and sample CSV) ──────
+app/data/*.sqlite3
+app/data/*.sqlite3-shm
+app/data/*.sqlite3-wal
+app/data/evidence/
+
+# ── Generated evidence images (large binary PNGs) ─────────────────────────────
+app/output/
+
+# ── Test temporary directories ─────────────────────────────────────────────────
+app/.test-tmp/
+app/.pytest_cache/
+app/.playwright-cli/
+
+# ── Docker layer cache and build context ──────────────────────────────────────
+app/.dockerignore
+
+# ── Large binary documentation (PDFs, compiled reports) ───────────────────────
+VIDYUT_TRACE_FINAL_PRD.pdf
+app/docs/BOB_USAGE.pdf
+app/docs/IBM_Bob_Usage_Evidence.pdf
+app/docs/bob_usage_report.html
+
+# ── Bulky evaluation trace artifacts (full JSON kept for human reference) ──────
+# The summary fields are accessible; only per-case trace arrays are large.
+# Keep: docs/*.json — they are small enough and needed for benchmark context.
+# Exclude only the bob-evidence directory which holds screenshot binaries.
+app/docs/bob-evidence/
+
+# ── Playwright screenshot output ───────────────────────────────────────────────
+app/docs/rehearsal/
+
+# ── Git internals ──────────────────────────────────────────────────────────────
+**/.git/
+
+# ── OS and editor noise ────────────────────────────────────────────────────────
+**/.DS_Store
+**/Thumbs.db
+**/*.swp
+**/*.swo

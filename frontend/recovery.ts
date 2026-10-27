@@ -18,7 +18,7 @@ export function restoreWorkspace(raw:unknown,runs:{id:string}[],cases:{id:string
  const chosen=v.screen==='inspection'?cases.find(c=>c.id===v.caseId):null;
  if(chosen&&runs.some(r=>r.id===chosen.run_id))return {runId:chosen.run_id,assetId:chosen.boundary_asset_id,sequence:chosen.analysis_sequence,screen:'inspection',caseId:chosen.id,actor,analysis:v.analysis?.sequence===chosen.analysis_sequence?{area:chosen.boundary_asset_id,sequence:chosen.analysis_sequence}:null};
  if(!runs.some(r=>r.id===v.runId))return null;
- const sequence=Number.isInteger(v.sequence)&&v.sequence!>=0&&v.sequence!<2880?v.sequence!:null;
+ const sequence=Number.isInteger(v.sequence)&&v.sequence!=null&&v.sequence>=0&&v.sequence<2880?v.sequence:null;
  const analysis=v.analysis&&typeof v.analysis.area==='string'&&Number.isInteger(v.analysis.sequence)&&v.analysis.sequence>=0&&v.analysis.sequence<2880?v.analysis:null;
  return {runId:v.runId!,assetId:typeof v.assetId==='string'?v.assetId:'branch-03',sequence,screen:'network',caseId:null,actor,analysis};
 }

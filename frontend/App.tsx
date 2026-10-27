@@ -63,7 +63,7 @@ function App(){
  useEffect(()=>{if(!initialized.current||!snapshot)return;const saved:Workspace={runId:snapshot.run.id,assetId:selected,sequence:screen==='inspection'&&detail?detail.case.analysis_sequence:snapshot.seq,screen,caseId:screen==='inspection'?selectedCase:null,actor,analysis:analysisContext?{area:analysisContext.area,sequence:analysisContext.snapshot.seq}:null};localStore.setItem(WORKSPACE_KEY,JSON.stringify(saved))},[snapshot?.run.id,snapshot?.seq,selected,screen,selectedCase,actor,analysisContext,detail?.case.id]);
  useEffect(()=>{
   if(!snapshot?.run.id)return;const rid=snapshot.run.id;let last=-1;const stream=new EventSource(`/api/runs/${rid}/events?after_seq=-1`);
-  stream.addEventListener('snapshot',(e)=>{const event=JSON.parse((e as MessageEvent).data);if(event.event_seq>last&&activeRun.current===rid){last=event.event_seq;setConnection('Live');loadRun(rid).catch(e=>setError(e.message));refreshCases().catch(()=>{})}});
+  stream.addEventListener('snapshot',(e)=>{const event=JSON.parse((e as MessageEvent).data);if(event.event_seq>last&&activeRun.current===rid){last=event.event_seq;setConnection('Live');loadRun(rid).catch(e=>setError((e as Error).message));refreshCases().catch(e=>console.error('[App] refreshCases error',e))}});
   stream.onopen=()=>setConnection('Live');stream.onerror=()=>setConnection('Reconnecting');return()=>stream.close();
  },[snapshot?.run.id,loadRun,refreshCases]);
  useEffect(()=>{if(analysisContext||!navigator&&!presenter&&!help&&!walkthrough&&!correction&&!groundOpen)return;

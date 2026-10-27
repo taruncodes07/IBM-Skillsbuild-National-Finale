@@ -1,6 +1,7 @@
 """Read-only benchmark result access; sealed case generation is outside runtime."""
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -14,9 +15,18 @@ def fingerprint():
     return digest.hexdigest()
 
 
+def _load_json(path):
+    """Load JSON from path; returns None and logs on parse error."""
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (json.JSONDecodeError,OSError) as exc:
+        logging.warning('benchmark: could not read %s: %s',path.name,exc)
+        return None
+
 def results():
     path=ROOT/'docs'/'independent-results.json'
-    report=json.loads(path.read_text(encoding='utf-8')) if path.exists() else dict(status='NOT_RUN')
+    loaded=_load_json(path) if path.exists() else None
+    report=loaded if loaded is not None else dict(status='NOT_RUN')
     if report.get('code_hash')!=fingerprint() and path.exists():
         report=dict(status='STALE',reason='Candidate code changed; rerun the independent evaluator')
     report['planner_pilot']=planner_pilot()
@@ -27,7 +37,8 @@ def results():
 def planner_pilot():
     path=ROOT/'docs'/'planner-pilot-results.json'
     if not path.exists():return dict(status='NOT_RUN')
-    report=json.loads(path.read_text(encoding='utf-8'))
+    report=_load_json(path)
+    if report is None:return dict(status='STALE',reason='Pilot results file could not be parsed')
     if report.get('code_hash')!=fingerprint():
         return dict(status='STALE',reason='Candidate or pilot changed; rerun the pinned-provider pilot')
     return report
@@ -36,7 +47,8 @@ def planner_pilot():
 def adaptive():
     path=ROOT/'docs'/'adaptive-results.json'
     if not path.exists():return dict(status='NOT_RUN')
-    report=json.loads(path.read_text(encoding='utf-8'))
+    report=_load_json(path)
+    if report is None:return dict(status='STALE',reason='Adaptive results file could not be parsed')
     if report.get('code_hash')!=fingerprint():
         return dict(status='STALE',reason='Candidate or evaluator changed; rerun the full adaptive evaluation')
     # Complete trace artifacts stay in the downloadable report, keeping API polling small.

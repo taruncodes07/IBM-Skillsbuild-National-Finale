@@ -13,7 +13,9 @@ VERSION='workers-1.0'
 
 def execute(snapshot,area_id,past_frames):
     started=time.perf_counter()
-    balance=next(b for b in snapshot['balances'] if b['boundary_asset_id']==area_id)
+    balance=next((b for b in snapshot['balances'] if b['boundary_asset_id']==area_id),None)
+    if balance is None:
+        raise ValueError(f'No balance found for area {area_id} in snapshot seq {snapshot.get("seq")}')
     source=snapshot['run'].get('source',{})
     digest=source.get('source_hash') or hashlib.sha256(json.dumps(snapshot['readings'],sort_keys=True).encode()).hexdigest()
     prefix=f"{snapshot['run']['id']}-{snapshot['seq']}-{area_id}"
@@ -130,7 +132,8 @@ def rule_plan(area_id,workers,fusion):
 
 def validate_policy(proposal,area_id,workers,fusion):
     known=set(fusion['evidence_ids'])
-    areas={area_id}|set(workers[3]['findings']['candidate_area_ids'])
+    w4_findings=workers[3]['findings'] if len(workers)>3 else {}
+    areas={area_id}|set(w4_findings.get('candidate_area_ids',[]))
     if not set(proposal.evidence_ids)<=known:return dict(allowed=False,reason='Unknown evidence reference')
     if proposal.target_area_id not in areas:return dict(allowed=False,reason='Target exceeds supported localization')
     if fusion['diagnostic_status'] in ('WITHIN_MODEL_RANGE','PERSISTENCE_PENDING'):
@@ -151,5 +154,6 @@ def permitted_actions(workers,fusion):
     if fusion['diagnostic_status']=='DATA_INCOMPLETE':
         return ['REQUEST_MISSING_DATA','REQUEST_TOPOLOGY_CHECK','GENERATE_CASE_SUMMARY','ABSTAIN_NO_ACTION']
     actions=list(get_args(Action))
-    if workers[2]['findings']['billing_status']=='NOT_AVAILABLE':actions.remove('REQUEST_BILLING_AUDIT')
+    w3_findings=workers[2]['findings'] if len(workers)>2 else {}
+    if w3_findings.get('billing_status')=='NOT_AVAILABLE':actions.remove('REQUEST_BILLING_AUDIT')
     return actions

@@ -41,7 +41,7 @@ export default function ComparisonPanel({onClose,reduced}:{onClose:()=>void;redu
  const path=(key:'cumulative_without_kwh'|'cumulative_with_kwh')=>'M60,250'+visible.map(p=>` L${x(p.sequence)},${y(p[key])}`).join('');
  const exportReport=()=>{if(!report)return;const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download=`grid-trace-comparison-seed-${report.assumptions.seed}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
  return <div className="modal-backdrop comparison-backdrop"><section ref={dialog} className="comparison-panel" role="dialog" aria-modal="true" aria-labelledby={id}>
-  <div className="comparison-heading"><div><span className="comparison-eyebrow">HACKATHON / PAIRED SIMULATION</span><h2 id={id}>The same grid. A different outcome.</h2><p>24 hours of electricity loss, with and without Grid Trace.</p></div><button onClick={onClose} aria-label="Close loss comparison"><X size={20}/></button></div>
+  <div className="comparison-heading"><div><span className="comparison-eyebrow">HACKATHON / PAIRED SIMULATION</span><h2 id={id}>The same grid. A different outcome.</h2><p>24 hours of electricity loss, with and without VidyutDrishti.</p></div><button onClick={onClose} aria-label="Close loss comparison"><X size={20}/></button></div>
   <div className="comparison-assumptions">
    <label>Scenario<select value={scenario} disabled={loading} onChange={e=>setScenario(e.target.value)}><option value="visible_unmetered_load">Visible unmetered load</option><option value="hidden_bypass">Hidden bypass</option><option value="clean">Clean network / control</option></select></label>
    <label>Seed<input type="number" min={0} max={1000000} value={seed} disabled={loading} onChange={e=>setSeed(+e.target.value)}/></label>
@@ -53,12 +53,12 @@ export default function ComparisonPanel({onClose,reduced}:{onClose:()=>void;redu
   {error&&<p role="alert" className="comparison-error">{error}</p>}
   {changed&&<p className="comparison-change" role="status">Settings changed. Run again to apply them; the chart still shows the previous run.</p>}
   <div className="comparison-metrics" aria-label="Cumulative physical network loss">
-   <div className="without"><span>Without Grid Trace</span><strong>{amount(without)} <small>kWh lost</small></strong><p>Loss continues without intervention.</p></div>
-   <div className="with"><span>With Grid Trace + crew repair</span><strong>{amount(withSystem)} <small>kWh lost</small></strong><p>Detection → {report?.assumptions.repair_delay_minutes??delay} min response → {Math.round((report?.assumptions.repair_effectiveness??effectiveness/100)*100)}% removal.</p></div>
+   <div className="without"><span>Without VidyutDrishti</span><strong>{amount(without)} <small>kWh lost</small></strong><p>Loss continues without intervention.</p></div>
+   <div className="with"><span>With VidyutDrishti + crew repair</span><strong>{amount(withSystem)} <small>kWh lost</small></strong><p>Detection → {report?.assumptions.repair_delay_minutes??delay} min response → {Math.round((report?.assumptions.repair_effectiveness??effectiveness/100)*100)}% removal.</p></div>
    <div className="saved"><span>Energy saved in this simulation</span><strong>{amount(saved)} <small>kWh</small></strong><p>{without?amount(saved/without*100):'0.0'}% less total network loss so far.</p></div>
   </div>
   <div className="comparison-chart-heading"><strong>Cumulative network loss <small>/ kWh</small></strong><div><span className="chart-without">— Without system</span><span className="chart-with">┄ With system + repair</span></div></div>
-  <svg className="comparison-chart" viewBox="0 0 900 290" role="img" aria-labelledby={`${id}-chart`}><title id={`${id}-chart`}>Cumulative electricity loss: without Grid Trace {amount(without)} kWh; with Grid Trace and simulated repair {amount(withSystem)} kWh, saving {amount(saved)} kWh. Use the timeline slider to inspect each interval.</title>
+  <svg className="comparison-chart" viewBox="0 0 900 290" role="img" aria-labelledby={`${id}-chart`}><title id={`${id}-chart`}>Cumulative electricity loss: without VidyutDrishti {amount(without)} kWh; with VidyutDrishti and simulated repair {amount(withSystem)} kWh, saving {amount(saved)} kWh. Use the timeline slider to inspect each interval.</title>
    {[0,.25,.5,.75,1].map(f=><g key={f}><line x1="60" x2="840" y1={y(totalWithout*f)} y2={y(totalWithout*f)} stroke="#304455" strokeDasharray="3 5"/><text x="48" y={y(totalWithout*f)+4} textAnchor="end">{Math.round(totalWithout*f)}</text></g>)}
    {[0,6,12,18,24].map(h=><text key={h} x={60+h/24*780} y="278" textAnchor="middle">{clock(h*60)}</text>)}
    {report?.incident_start_sequence!=null&&frame>=report.incident_start_sequence&&<line x1={x(report.incident_start_sequence-1)} x2={x(report.incident_start_sequence-1)} y1="36" y2="250" stroke="#f3ba77" opacity=".4"/>}

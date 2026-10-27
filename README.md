@@ -1,6 +1,6 @@
 <div align="center">
 
-# Grid Trace (विद्युत Trace)
+# VidyutDrishti (विद्युतदृष्टि)
 
 ### *Simulation-Backed Electricity Distribution Digital Twin & Explainable Loss Investigation Platform*
 
@@ -17,7 +17,7 @@
 
 <br/>
 
-**Grid Trace** is an enterprise-grade digital twin and multi-agent investigation platform designed to localize, analyze, and document non-technical energy losses (NTL) in low-voltage electrical distribution networks. Built for the **IBM SkillsBuild National Finale**, the system bridges physical energy balance accounting, real-time 3D procedural simulation, simulated aerial computer vision, and auditable human-in-the-loop governance.
+**VidyutDrishti** (विद्युतदृष्टि) is an enterprise-grade digital twin and multi-agent investigation platform designed to localize, analyze, and document non-technical energy losses (NTL) in low-voltage electrical distribution networks. Built for the **IBM SkillsBuild National Finale**, the system bridges physical energy balance accounting, real-time 3D procedural simulation, simulated aerial computer vision, and auditable human-in-the-loop governance.
 
 [Key Features](#-key-features) • [Architecture](#-system-architecture) • [Mathematical Model](#-mathematical--analytical-formulation) • [Quickstart](#-getting-started) • [Investigation Workflow](#-end-to-end-investigation-workflow) • [Verification](#-testing--verification-harness) • [Responsible AI](#-responsible-ai--ethical-guardrails)
 
@@ -32,8 +32,8 @@ In electrical distribution grids worldwide—and notably across emerging infrast
 
 Traditional detection relies either on indiscriminate black-box machine learning models (which suffer from high false-positive rates and lack operational explainability) or expensive, unguided physical field patrols.
 
-### The Grid Trace Solution
-Grid Trace replaces guesswork with an **explainable, closed-loop forensic investigation platform**:
+### The VidyutDrishti Solution
+VidyutDrishti replaces guesswork with an **explainable, closed-loop forensic investigation platform**:
 
 1. **Sectional Energy Accounting**: Ingests smart meter (AMI) telemetry, isolates topological cuts across feeders, distribution transformers, and low-voltage branches, and calculates physical residuals against quadratic conductor dissipation models.
 2. **Deterministic Anomaly Localization**: Evaluates rolling $3\sigma$ residual bounds over consecutive time windows to flag the minimal observable network section.
@@ -42,7 +42,7 @@ Grid Trace replaces guesswork with an **explainable, closed-loop forensic invest
 5. **Multi-Agent Orchestration & Auditable Governance**: Leverages LangGraph workers with pluggable LLM backends (IBM Granite, Google Gemini, local Ollama) to synthesize diagnostic reports, enforce strict human-in-the-loop role separation (Analyst, Reviewer, Supervisor), and guarantee tamper-evident SHA-256 evidence ledgers.
 
 > [!IMPORTANT]
-> **Synthetic Demonstration & Ethical Disclaimer**: All assets, topology coordinates, time-series measurements, incidents, flight telemetry, and imagery rendered within Grid Trace are synthetic. Statistical energy residuals and computer vision candidates indicate anomalies requiring human investigation; they do not establish legal proof of theft, energization, or billing authorization.
+> **Synthetic Demonstration & Ethical Disclaimer**: All assets, topology coordinates, time-series measurements, incidents, flight telemetry, and imagery rendered within VidyutDrishti are synthetic. Statistical energy residuals and computer vision candidates indicate anomalies requiring human investigation; they do not establish legal proof of theft, energization, or billing authorization.
 
 ---
 
@@ -349,7 +349,7 @@ OLLAMA_ENDPOINT=http://127.0.0.1:11434
 
 ## 📡 API Specification & Data Contracts
 
-Grid Trace provides a comprehensive, RESTful OpenAPI v3 compliant backend:
+VidyutDrishti provides a comprehensive, RESTful OpenAPI v3 compliant backend:
 
 | Method | Endpoint | Description | Role Required |
 | :--- | :--- | :--- | :--- |
@@ -368,7 +368,7 @@ Grid Trace provides a comprehensive, RESTful OpenAPI v3 compliant backend:
 
 ## 🧪 Testing & Verification Harness
 
-Grid Trace enforces strict test-driven development and mathematical verification standards across all modules:
+VidyutDrishti enforces strict test-driven development and mathematical verification standards across all modules:
 
 ```bash
 # Execute complete backend pytest suite (101 unit and integration tests)
@@ -394,7 +394,7 @@ python tests/benchmark_independent.py
 
 ## 🛡️ Responsible AI & Ethical Guardrails
 
-Grid Trace was designed from the ground up under strict utility governance principles:
+VidyutDrishti was designed from the ground up under strict utility governance principles:
 
 1. **No Automated Accusation or Enforcement**: System detections represent statistical indicators and visual candidate cues intended solely to guide human investigators. No automatic disconnections, bill penalties, or public notices can be generated.
 2. **Accountability & Separation of Duties**: Critical operational actions (approving drone flights, dismissing an alert, closing a case) require explicit persona role transitions (`Analyst` $\rightarrow$ `Reviewer` $\rightarrow$ `Supervisor`).
@@ -405,7 +405,7 @@ Grid Trace was designed from the ground up under strict utility governance princ
 
 ## 👥 Authors & Acknowledgments
 
-Developed by **Team Grid Trace** for the **IBM SkillsBuild National Finale 2026**:
+Developed by **Team VidyutDrishti** for the **IBM SkillsBuild National Finale 2026**:
 - **Abhinandan** ([@abhi8667](https://github.com/abhi8667))
 - **Tarun** ([@taruncodes07](https://github.com/taruncodes07))
 - **Sudeepti Sagar** ([@SudeeptiSagar](https://github.com/SudeeptiSagar))

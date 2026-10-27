@@ -27,7 +27,7 @@
 @media(max-width:650px){.inspection .right-panel{order:0}.inspection .left-panel{order:1}.inspection .center-panel{order:2}}
 .capture-panel:focus-visible{outline:2px solid #2563eb;outline-offset:-3px}
 
-/* Grid Trace operations workspace */
+/* VidyutDrishti operations workspace */
 :root{--surface:#0a0f16;--surface-card:#0e1520;--surface-hover:#141f2e;--line:#1c2738;--line-subtle:#16202e;--accent:#2563eb;--accent-hover:#1d4ed8;--accent-light:#3b82f6;--accent-sky:#60a5fa;--quiet:#94a3b8;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--amber:#f59e0b;--amber-dark:#b45309}
 html,body,#root{font-size:12.5px;background:#06090e;color:#e2e8f0}
 button{min-height:32px;border-radius:6px;font-weight:500;font-size:12px;padding:5px 11px;transition:background .15s,border-color .15s,transform .1s}button:disabled{opacity:.45}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #2563eb;outline-offset:2px}

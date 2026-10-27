@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "powershell -NoProfile -Command \"Write-Host '[Bob Hook: SessionStart] Initializing Grid Trace app workspace...'\""
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*(simulation\\.py|analytics\\.py).*",
+        "action": "warn",
+        "message": "Caution: Enforce Truth Isolation boundary. analytics.py must not import or depend on simulation.py or private_truth."
+      },
+      {
+        "matcher": ".*\\.env$",
+        "action": "block",
+        "message": "Security boundary: Do not expose, log, or commit secret environment variables."
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*\\.py$",
+        "command": "python -m py_compile $FILE"
+      },
+      {
+        "matcher": ".*\\.(ts|tsx)$",
+        "command": "npx --no-install tsc --noEmit"
+      }
+    ]
+  }
+}

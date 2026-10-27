@@ -2,11 +2,26 @@ import {Canvas,useFrame,useThree} from '@react-three/fiber';
 import {OrbitControls,Html,Line} from '@react-three/drei';
 import {useEffect,useMemo,useRef,useState,forwardRef,useImperativeHandle} from 'react';
 import * as THREE from 'three';
-import type {Asset,Snapshot,V3,Pose,Mission} from './types';
+import type {Asset,Snapshot,V3,Pose,Mission,Connection} from './types';
 import {sampleFlight,type FlightTelemetry} from './flight';
-export type SceneHandle={focus:()=>void;reset:()=>void;capture:(pose:Pose)=>Promise<string>;fly:(mission:Mission)=>Promise<void>};
-type Props={snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean;inspection?:boolean;onFlightProgress?:(value:FlightTelemetry)=>void;onReady?:()=>void;onUnavailable?:()=>void;paused?:boolean};
+export type SceneHandle={focus:()=>void;reset:()=>void;cancelTour:()=>void;capture:(pose:Pose)=>Promise<string>;fly:(mission:Mission)=>Promise<void>};
+type Props={snapshot:Snapshot;selected:string;onSelect:(id:string)=>void;handle:React.RefObject<SceneHandle|null>;onFps?:(v:number)=>void;reviewedIds:string[];reduced:boolean;inspection?:boolean;onFlightProgress?:(value:FlightTelemetry)=>void;onReady?:()=>void;onUnavailable?:()=>void;paused?:boolean;rotating?:boolean;motion?:boolean;onManualCamera?:()=>void};
 const blue='#3b82f6',royalBlue='#2563eb',amber='#f59e0b',slate='#475569';
+
+// One draw call; positions advance in seconds rather than frames.
+function EnergyFlow({connections,anomalous,animate}:{connections:Connection[];anomalous:string[];animate:boolean}){
+ const mesh=useRef<THREE.InstancedMesh>(null),time=useRef(0);
+ const routes=useMemo(()=>connections.map(c=>({curve:new THREE.CatmullRomCurve3(c.geometry_points_m.map(p=>new THREE.Vector3(...p))),alert:anomalous.includes(c.from_asset_id)||anomalous.includes(c.to_asset_id)})),[connections,anomalous.join(',')]);
+ const helper=useMemo(()=>new THREE.Object3D(),[]),position=useMemo(()=>new THREE.Vector3(),[]);
+ useEffect(()=>{if(!mesh.current)return;routes.forEach((r,i)=>{for(let j=0;j<3;j++)mesh.current!.setColorAt(i*3+j,new THREE.Color(r.alert?'#ffc575':'#99e7ff'))});if(mesh.current.instanceColor)mesh.current.instanceColor.needsUpdate=true},[routes]);
+ useFrame((_,delta)=>{if(!mesh.current)return;if(animate)time.current+=Math.min(delta,.1);routes.forEach((r,i)=>{for(let j=0;j<3;j++){r.curve.getPoint((time.current*.16+j/3+i*.07)%1,position);helper.position.copy(position);helper.scale.setScalar(r.alert?1.3:1);helper.updateMatrix();mesh.current!.setMatrixAt(i*3+j,helper.matrix)}});mesh.current.instanceMatrix.needsUpdate=true});
+ return <instancedMesh ref={mesh} args={[undefined,undefined,connections.length*3]} frustumCulled={false}><sphereGeometry args={[.19,6,6]}/><meshBasicMaterial toneMapped={false}/></instancedMesh>;
+}
+function AlertPulse({position,animate}:{position:V3;animate:boolean}){
+ const ring=useRef<THREE.Mesh>(null),time=useRef(0);
+ useFrame((_,delta)=>{if(!ring.current)return;if(animate)time.current+=Math.min(delta,.1);const phase=(time.current*.55)%1;ring.current.scale.setScalar(1+phase*.7);(ring.current.material as THREE.MeshBasicMaterial).opacity=animate?.65*(1-phase):.5});
+ return <mesh ref={ring} position={[position[0],.2,position[2]]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[3.5,3.7,40]}/><meshBasicMaterial color={amber} transparent depthWrite={false}/></mesh>;
+}
 
 function Box({p,s,color,...rest}:{p:V3;s:V3;color:string;[key:string]:any}){return <mesh position={p} {...rest}><boxGeometry args={s}/><meshStandardMaterial color={color} roughness={.85}/></mesh>}
 function Wire({points,r=.065,color='#a9bfc4'}:{points:V3[];r?:number;color?:string}){
@@ -16,8 +31,8 @@ function Wire({points,r=.065,color='#a9bfc4'}:{points:V3[];r?:number;color?:stri
 function House({a,onSelect}:{a:Asset;onSelect:(id:string)=>void}){
  const [x,,z]=a.position_m; const i=Number(a.id.slice(-2))||1;
  const floors=2+(i%2); const h=floors*2.7; const w=6.4+(i%3)*.5; const d=6.8+((i*2)%3)*.6;
- const wallCol=['#222a33','#29333e','#322e2a','#252d37','#2e353e'][i%5];
- const trimCol=['#182029','#1f2732','#25201c'][i%3];
+ const wallCol=['#a0adb7','#b4b0a3','#9aaeb4','#b4a397','#91a4b4'][i%5];
+ const trimCol=['#526778','#65798b','#756b5d'][i%3];
  const tankCol=i%3===0?'#172554':'#0f172a';
  const rotY=((i*19)%7-3)*.018;
  return <group position={[x,0,z]} rotation={[0,rotY,0]} onClick={e=>{e.stopPropagation();onSelect(a.id)}}>
@@ -51,7 +66,7 @@ function House({a,onSelect}:{a:Asset;onSelect:(id:string)=>void}){
    {[-w*.26,-w*.09,w*.09,w*.26].map((rx,ri)=><Box key={ri} p={[rx,.21,.38]} s={[.04,.42,.04]} color="#334155"/>)}
   </group>
   <group position={[0,h+.4,0]}>
-   <Box p={[0,.08,0]} s={[w+.2,.16,d+.2]} color="#17202a"/>
+   <Box p={[0,.08,0]} s={[w+.2,.16,d+.2]} color="#647587"/>
    <Box p={[0,.42,d/2+.04]} s={[w+.2,.68,.14]} color={wallCol}/>
    <Box p={[0,.42,-d/2-.04]} s={[w+.2,.68,.14]} color={wallCol}/>
    <Box p={[-w/2-.04,.42,0]} s={[.14,.68,d]} color={wallCol}/>
@@ -87,6 +102,11 @@ function AutoRickshaw({p,rotY=0}:{p:V3;rotY?:number}){
   <mesh position={[0,.6,.92]}><sphereGeometry args={[.09,8,8]}/><meshBasicMaterial color="#fef08a"/></mesh>
  </group>;
 }
+function MovingTraffic({animate}:{animate:boolean}){
+ const first=useRef<THREE.Group>(null),second=useRef<THREE.Group>(null),time=useRef(0);
+ useFrame((_,delta)=>{if(animate)time.current+=Math.min(delta,.1);if(first.current)first.current.position.x=-62+(time.current*3.2)%124;if(second.current)second.current.position.x=62-((time.current*2.6+45)%124)});
+ return <><group ref={first}><AutoRickshaw p={[0,0,-6.5]} rotY={Math.PI/2}/></group><group ref={second}><AutoRickshaw p={[0,0,-9.5]} rotY={-Math.PI/2}/></group></>;
+}
 function InfillBuilding({p,w,h,d,rotY=0,color,seed=1}:{p:V3;w:number;h:number;d:number;rotY?:number;color:string;seed?:number}){
  const [x,y,z]=p; const tankCol=seed%2===0?'#172554':'#0f172a';
  return <group position={[x,y,z]} rotation={[0,rotY,0]}>
@@ -97,7 +117,7 @@ function InfillBuilding({p,w,h,d,rotY=0,color,seed=1}:{p:V3;w:number;h:number;d:
    {[-w*.25,w*.25].map((wx,wi)=><mesh key={wi} position={[wx,fl*2.7+1.5,d/2+.02]}><planeGeometry args={[.9,1.05]}/><meshStandardMaterial color="#fef08a" emissive="#ca8a04" emissiveIntensity={(seed+fl+wi)%4===0?.2:1} side={THREE.DoubleSide}/></mesh>)}
   </group>)}
   <group position={[0,h+.4,0]}>
-   <Box p={[0,.06,0]} s={[w+.15,.12,d+.15]} color="#141c24"/>
+   <Box p={[0,.06,0]} s={[w+.15,.12,d+.15]} color="#627486"/>
    <Box p={[0,.38,d/2+.03]} s={[w+.15,.64,.12]} color={color}/>
    <Box p={[0,.38,-d/2-.03]} s={[w+.15,.64,.12]} color={color}/>
    <Box p={[-w/2-.03,.38,0]} s={[.12,.64,d]} color={color}/>
@@ -137,7 +157,7 @@ function Transformer({a,onSelect}:{a:Asset;onSelect:(id:string)=>void}){const [x
 function Scenery(){
  const infill=useMemo(()=>{
   const list:{p:V3;w:number;h:number;d:number;rotY:number;color:string;seed:number}[]=[];
-  const cols=['#1e2630','#262e38','#2e2a26','#222b35','#2a313b','#1c232d','#2b333e'];
+  const cols=['#7e909e','#8e9ba7','#a19687','#8399a3','#959da4','#778b9a','#9b938b'];
   // Clustered dense infill along Indian urban layout
   const blocks=[
    {x:-46,z:-38,nx:4,nz:2,w:6.2,d:7,spX:7.8,spZ:8.5},
@@ -172,9 +192,9 @@ function Scenery(){
  }).filter(([x,z])=>Math.abs(x)>54||Math.abs(z)>48||Math.abs(z-6)<4),[]);
  return <group>
   {/* Ground plane */}
-  <Box p={[0,-.7,0]} s={[155,1,155]} color="#06090f"/>
+  <Box p={[0,-.7,0]} s={[155,1,155]} color="#243343"/>
   {/* Main asphalt street */}
-  <Box p={[0,-.14,-8]} s={[148,.16,7]} color="#0b111a"/>
+  <Box p={[0,-.14,-8]} s={[148,.16,7]} color="#344454"/>
   {/* Roadside drainage slabs / gutters */}
   {[-11.6,-4.4].map(z=><group key={z}>{Array.from({length:24},(_,i)=><Box key={i} p={[-68+i*6,-.04,z]} s={[5.6,.08,.6]} color="#1a2432"/>)}</group>)}
   {/* Narrow cross gullies / lanes */}
@@ -226,8 +246,8 @@ function LaunchStation({p}:{p:V3}){
    <mesh position={[0,2.8,0]}><cylinderGeometry args={[.06,.08,1.8,8]}/><meshStandardMaterial color="#334155"/></mesh>
    <mesh position={[0,3.8,0]}><sphereGeometry args={[.18,8,8]}/><meshStandardMaterial color={amber} emissive={amber} emissiveIntensity={1.8}/></mesh>
   </group>
-  <Html position={[0,2.6,0]} center distanceFactor={110} zIndexRange={[5,0]}>
-   <div className="launchpad-label"><span className="live-dot"/><strong>BESCOM AERIAL BASE · DOCK-01</strong></div>
+  <Html position={[0,2.6,0]} center zIndexRange={[5,0]}>
+   <div className="launchpad-label"><span className="live-dot"/><strong>GRID TRACE AERIAL BASE · DOCK-01</strong></div>
   </Html>
  </group>;
 }
@@ -249,7 +269,7 @@ function Drone({active,reduced}:{active:boolean;reduced:boolean}){
   {[-.7,.7].map(x=><Box key={x} p={[x,-.55,0]} s={[.08,.5,1.6]} color="#334155"/>)}
  </group>;
 }
-const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced,inspection,onFlightProgress,onReady,onUnavailable},ref){
+const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapshot,selected,onSelect,onFps,reviewedIds,reduced,inspection,onFlightProgress,onReady,onUnavailable,rotating=false,motion=true,onManualCamera},ref){
  const {gl,scene,camera}=useThree(); const controls=useRef<any>(null);const overlay=useRef<THREE.Group>(null);const drone=useRef<THREE.Group>(null);const [mission,setMission]=useState<Mission|null>(null);
  const flight=useRef<{start:number;resolve:()=>void;reject:(error:Error)=>void;mission:Mission;timer:ReturnType<typeof setTimeout>;lastUpdate:number;route?:V3[]}|null>(null); const fps=useRef({t:0,n:0});
  const [flightActive,setFlightActive]=useState(false);const [routeComplete,setRouteComplete]=useState(false);
@@ -257,10 +277,12 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
  const asset=snapshot.assets.find(a=>a.id===selected)!;const targetBranch=asset.kind==='household'?asset.parent_id!:selected;
  const status=snapshot.balances.find(b=>b.boundary_asset_id===targetBranch);const anomalous=snapshot.alerts.filter(a=>a.status==='active').map(a=>a.boundary_asset_id);
  const selectedColor=anomalous.includes(targetBranch)?amber:blue;
+ const offset=useMemo(()=>new THREE.Vector3(),[]);
  useFrame((_,delta)=>{
+   if(rotating&&!reduced&&!inspection&&!flight.current&&!routeComplete&&controls.current){offset.copy(camera.position).sub(controls.current.target);offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP,Math.min(delta,.1)*.12);camera.position.copy(controls.current.target).add(offset);camera.lookAt(controls.current.target)}
    fps.current.n++;fps.current.t+=delta;if(fps.current.t>2){onFps?.(Math.round(fps.current.n/fps.current.t));fps.current={n:0,t:0}}
    if(flight.current&&drone.current){
-    const f=flight.current,now=performance.now(),sample=sampleFlight(f.route||f.mission.waypoints_m,(now-f.start)*3,reduced);
+    const f=flight.current,now=performance.now(),sample=sampleFlight(f.route||f.mission.waypoints_m,now-f.start,reduced);
     dronePos.current=sample.position;
     drone.current.position.set(...sample.position);
     if(!reduced){
@@ -277,7 +299,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
      f.resolve();
     }
    }else if(routeComplete&&drone.current&&dronePos.current){
-    const bob=Math.sin(performance.now()*0.003)*0.12;
+    const bob=reduced||!motion?0:Math.sin(performance.now()*0.003)*0.12;
     drone.current.position.set(dronePos.current[0],dronePos.current[1]+bob,dronePos.current[2]);
     if(!reduced){
      camera.position.lerp(new THREE.Vector3(dronePos.current[0]+15,dronePos.current[1]+8,dronePos.current[2]+18),Math.min(1,delta*2));
@@ -290,7 +312,8 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
  useEffect(()=>{if(inspection&&!flight.current){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(44,35,54)));controls.current?.target.copy(p.clone().add(new THREE.Vector3(0,5,10)));controls.current?.update()}},[inspection,asset.id,camera]);
  useImperativeHandle(ref,()=>({
   focus(){const p=new THREE.Vector3(...asset.position_m);camera.position.copy(p.clone().add(new THREE.Vector3(32,30,40)));controls.current.target.copy(p);controls.current.update()},
-  reset(){camera.position.set(100,95,120);controls.current.target.set(0,0,0);controls.current.update()},
+  reset(){if(flight.current)return;setMission(null);setRouteComplete(false);camera.position.set(100,95,120);controls.current.target.set(0,0,0);controls.current.update()},
+  cancelTour(){const f=flight.current;if(f?.mission.id==='presentation-tour'){clearTimeout(f.timer);flight.current=null;setFlightActive(false);setMission(null);setRouteComplete(false);f.resolve()}},
   fly(m){
    if(flight.current){clearTimeout(flight.current.timer);flight.current=null}
    const takeoff:V3=[0,.45,-22]; const climb:V3=[0,15,-22];
@@ -335,12 +358,12 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
   }
  }),[asset,gl,scene,camera,reduced,onFlightProgress]);
  return <>
-  <color attach="background" args={['#060a10']}/><fog attach="fog" args={['#06090e',100,260]}/>
+  <color attach="background" args={['#101d2c']}/><fog attach="fog" args={['#152538',180,360]}/>
   {/* Key: cool-white overhead sun */}
-  <ambientLight intensity={0.75} color="#b8c8e0"/>
-  <directionalLight position={[15,60,45]} intensity={2.8} color="#dde8f5"/>
+  <hemisphereLight intensity={1.4} color="#d6eaff" groundColor="#53667b"/>
+  <directionalLight position={[15,60,45]} intensity={2.4} color="#fff2dc"/>
   {/* Fill: deep blue from opposite corner */}
-  <directionalLight position={[-25,18,-35]} intensity={1.4} color="#2a5bbf"/>
+  <directionalLight position={[-25,30,-35]} intensity={1.7} color="#bedaff"/>
   {/* Warm accent: faint orange bounce from ground level */}
   <directionalLight position={[0,-8,30]} intensity={0.35} color="#f59e4a"/>
   {/* Street / pole lamp point lights scattered through scene */}
@@ -361,14 +384,17 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
   {snapshot.physical_connections_m.map((p,i)=><Wire key={'extra'+i} points={p}/>)}
   {snapshot.physical_occluders?.map((o,i)=><Box key={'occluder'+i} p={o.position_m} s={o.size_m} color="#1e293b"/>)}
   <group ref={overlay}>
+   <MovingTraffic animate={motion&&!reduced}/>
+   <EnergyFlow connections={snapshot.connections} anomalous={anomalous} animate={motion&&!reduced}/>
+   {snapshot.assets.filter(a=>anomalous.includes(a.id)).map(a=><AlertPulse key={a.id} position={a.position_m} animate={motion&&!reduced}/>)}
    {snapshot.connections.map(c=>{
     const problem=anomalous.includes(c.from_asset_id)||anomalous.includes(c.to_asset_id);const active=c.from_asset_id===targetBranch||c.to_asset_id===targetBranch;
     return <Line key={c.id} points={c.geometry_points_m} color={problem?amber:active?royalBlue:slate} lineWidth={problem||active?2.5:1} transparent opacity={(problem || active) ? .95 : .35}/>
    })}
    <mesh position={[asset.position_m[0],.1,asset.position_m[2]]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[3,3.3,40]}/><meshBasicMaterial color={selectedColor} transparent opacity={.8}/></mesh>
-   {!inspection&&!routeComplete&&<Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center distanceFactor={110} zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{!!status&&status.validity!=='valid'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>}
-   {!inspection&&snapshot.assets.filter(a=>a.kind==='feeder'&&a.id!==selected).map(a=><Html position={[a.position_m[0],12,a.position_m[2]]} key={a.id} center distanceFactor={140} zIndexRange={[5,0]}><button className="scene-label feeder" onClick={()=>onSelect(a.id)}>{a.label}</button></Html>)}
-   {(mission||routeComplete)&&<><Line points={flight.current?.route||mission?.waypoints_m||[]} color={royalBlue} lineWidth={2} dashed dashSize={1} gapSize={.7}/>{(mission?.waypoints_m||[]).map((p,i)=><group key={i} position={p}><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[1.6,1.8,32]}/><meshBasicMaterial color={blue} transparent opacity={.75} side={THREE.DoubleSide}/></mesh></group>)}<group ref={drone} position={dronePos.current}><Drone active={flightActive||routeComplete} reduced={reduced}/><Html position={[0,4,0]} center zIndexRange={[6,0]}><div className="drone-caption"><span style={{background:routeComplete?'#f59e0b':blue}}/>GT–01 <small>{flightActive?'IN FLIGHT':routeComplete?'AT VIEWPOINT':'STANDBY'}</small></div></Html><mesh rotation={[Math.PI,0,0]} position={[0,-4,0]}><coneGeometry args={[3.2,7.5,24,1,true]}/><meshBasicMaterial color={routeComplete?amber:royalBlue} wireframe transparent opacity={flightActive?.22:routeComplete?.38:.08}/></mesh>{(flightActive||routeComplete)&&<mesh rotation={[-Math.PI/2,0,0]} position={[0,-2.5,0]}><ringGeometry args={[1.6,1.85,24]}/><meshBasicMaterial color={routeComplete?amber:blue} transparent opacity={.85} side={THREE.DoubleSide}/></mesh>}</group></>}
+   {!inspection&&!flightActive&&!routeComplete&&<Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{!!status&&status.validity!=='valid'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>}
+   {!inspection&&!flightActive&&snapshot.assets.filter(a=>a.kind==='feeder'&&a.id!==selected).map(a=><Html position={[a.position_m[0],12,a.position_m[2]]} key={a.id} center zIndexRange={[5,0]}><button className="scene-label feeder" onClick={()=>onSelect(a.id)}>{a.label}</button></Html>)}
+   {(mission||routeComplete)&&<><Line points={flight.current?.route||mission?.waypoints_m||[]} color={royalBlue} lineWidth={2} dashed dashSize={1} gapSize={.7}/>{(mission?.waypoints_m||[]).map((p,i)=><group key={i} position={p}><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[1.6,1.8,32]}/><meshBasicMaterial color={blue} transparent opacity={.75} side={THREE.DoubleSide}/></mesh></group>)}<group ref={drone} position={dronePos.current}><Drone active={flightActive||routeComplete} reduced={reduced||!motion}/><Html position={[0,4,0]} center zIndexRange={[6,0]}><div className="drone-caption"><span style={{background:routeComplete?'#f59e0b':blue}}/>GT–01 <small>{flightActive?'IN FLIGHT':routeComplete?'AT VIEWPOINT':'STANDBY'}</small></div></Html><mesh rotation={[Math.PI,0,0]} position={[0,-4,0]}><coneGeometry args={[3.2,7.5,24,1,true]}/><meshBasicMaterial color={routeComplete?amber:royalBlue} wireframe transparent opacity={flightActive?.22:routeComplete?.38:.08}/></mesh>{(flightActive||routeComplete)&&<mesh rotation={[-Math.PI/2,0,0]} position={[0,-2.5,0]}><ringGeometry args={[1.6,1.85,24]}/><meshBasicMaterial color={routeComplete?amber:blue} transparent opacity={.85} side={THREE.DoubleSide}/></mesh>}</group></>}
    {(()=>{
      const flg=snapshot.assets.find(a=>a.id===mission?.target_asset_ids[0]);
      if(!flg)return null;
@@ -377,7 +403,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
       return <group position={[fx,0,fz]}>
        <mesh rotation={[-Math.PI/2,0,0]} position={[0,.18,0]}><ringGeometry args={[2.8,3.6,32]}/><meshBasicMaterial color={amber} transparent opacity={.9} side={THREE.DoubleSide}/></mesh>
        <mesh rotation={[-Math.PI/2,0,0]} position={[0,.2,0]}><ringGeometry args={[1.2,1.5,24]}/><meshBasicMaterial color="#d97706" transparent opacity={.7} side={THREE.DoubleSide}/></mesh>
-       <Html position={[0,15.2,0]} center distanceFactor={26} zIndexRange={[7,0]}>
+       <Html position={[0,15.2,0]} center zIndexRange={[7,0]}>
         <div className="pole-inspection-flag">
          <strong><span className="live-dot" style={{background:'#f59e0b'}}/>Inspection viewpoint</strong>
          <small>Review saved captures</small>
@@ -388,10 +414,10 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
      if(flightActive){
       return <group position={[fx,0,fz]}>
        <mesh rotation={[-Math.PI/2,0,0]} position={[0,.22,0]}><ringGeometry args={[2.2,2.8,32]}/><meshBasicMaterial color={royalBlue} transparent opacity={.85} side={THREE.DoubleSide}/></mesh>
-       <Html position={[0,12.5,0]} center distanceFactor={85} zIndexRange={[7,0]}>
+       <Html position={[0,12.5,0]} center zIndexRange={[7,0]}>
         <div className="pole-scanning-badge">
-         <strong><span className="live-dot" style={{background:blue}}/>AERIAL SCAN IN PROGRESS</strong>
-         <small>MULTISPECTRAL CONTOUR EXTRACTION</small>
+         <strong><span className="live-dot" style={{background:blue}}/>{mission?.id==='presentation-tour'?'DRONE TOUR':'RGB INSPECTION FLIGHT'}</strong>
+         <small>{mission?.id==='presentation-tour'?'CAMERA FLIGHT PREVIEW':'SIMULATED RGB CAMERA'}</small>
         </div>
        </Html>
       </group>;
@@ -399,7 +425,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
      if(anomalous.length>0){
       return <group position={[fx,0,fz]}>
        <mesh rotation={[-Math.PI/2,0,0]} position={[0,.15,0]}><ringGeometry args={[2,2.4,32]}/><meshBasicMaterial color={amber} transparent opacity={.55} side={THREE.DoubleSide}/></mesh>
-       <Html position={[0,12,0]} center distanceFactor={90} zIndexRange={[6,0]}>
+       <Html position={[0,12,0]} center zIndexRange={[6,0]}>
         <div className="pole-target-badge">
          <strong><span className="live-dot" style={{background:'#d97706'}}/>INSPECTION TARGET</strong>
          <small>UNEXPLAINED ENERGY DEFICIT · PENDING FLIGHT</small>
@@ -410,7 +436,7 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
      return null;
    })()}
   </group>
-  <OrbitControls ref={controls} makeDefault enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
+  <OrbitControls ref={controls} makeDefault onStart={onManualCamera} enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
  </>
 });
 export default function Scene({handle,onReady,paused,...props}:Props){return <Canvas frameloop={paused?'never':'always'} onCreated={()=>onReady?.()} camera={{position:[100,95,120],fov:40,near:.1,far:500}} dpr={[1,2]} gl={{antialias:true,powerPreference:'high-performance',alpha:false,stencil:false}}><World ref={handle} {...props} onReady={onReady}/></Canvas>}

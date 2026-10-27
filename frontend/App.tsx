@@ -3,6 +3,8 @@ import {Activity,ArrowRight,Box,Building2,Check,CheckCircle2,ChevronRight,Clipbo
 import type {SceneHandle} from './Scene';
 const Scene=lazy(()=>import('./Scene'));
 import {loadDemo} from './demo';
+import ComparisonPanel from './ComparisonPanel';
+import './presentation.css';
 import type {FlightTelemetry} from './flight';
 import InvestigationPanel from './InvestigationPanel';
 import WalkthroughModal from './WalkthroughModal';
@@ -22,6 +24,7 @@ const pretty=(s:string)=>words(s).replace(/^./,c=>c.toUpperCase());
 const newKey=()=>crypto.randomUUID();
 
 function App(){
+ const [comparisonOpen,setComparisonOpen]=useState(false),[rotating,setRotating]=useState(false),[motion,setMotion]=useState(true),[tourActive,setTourActive]=useState(false);
  const [analysisContext,setAnalysisContext]=useState<{snapshot:Snapshot;area:string}|null>(null);
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[selected,setSelected]=useState('branch-03'),[screen,setScreen]=useState<'network'|'inspection'>('network');
  const [actor,setActor]=useState('analyst'),[cases,setCases]=useState<Case[]>([]),[detail,setDetail]=useState<Detail|null>(null),[selectedCase,setSelectedCase]=useState<string|null>(null);
@@ -118,6 +121,21 @@ function App(){
   setNotice(['Baseline ready.','Missing telemetry loaded.','Persistent loss ready for investigation.'][preset-1]);
  });
  const dispatchDroneInspection=async()=>{await approve()};
+ const openComparison=()=>perform(async()=>{
+  if(!s||flying.current)return;
+  if(s.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id)}
+  setComparisonOpen(true);
+ });
+ const previewDrone=()=>perform(async()=>{
+  if(!scene.current||!s||flying.current||screen==='inspection')return;
+  if(s.run.playing){await api(`/runs/${s.run.id}/control`,'POST',{command:'pause'},actor);await loadRun(s.run.id)}
+  const renderer=scene.current;flying.current=true;setTourActive(true);setRotating(false);setFlightStats(null);
+  try{
+   // Renderer-only tour: no mission, case, approval or evidence is written to the API.
+   await renderer.fly({id:'presentation-tour',case_id:'',run_id:s.run.id,target_asset_ids:[boundary||'branch-03'],status:'flying',waypoints_m:[],capture_sequence:s.seq,failure_reason:null,frame_keys:{}});
+   setNotice('Drone tour complete. For RGB evidence capture, open a loss case, triage it and record a ground observation as Reviewer.');
+  }finally{renderer.reset();flying.current=false;setTourActive(false);setFlightStats(null)}
+ });
  const latestGround=detail?.ground?.at(-1);
  const openQuestion=latestGround&&!latestGround.resolved_from_ground&&latestGround.outstanding_question.trim()?latestGround:null;
  const groundResolvedLatest=!!detail?.ground?.length&&!!detail.ground[detail.ground.length-1].resolved_from_ground;
@@ -175,6 +193,7 @@ function App(){
   onToggleEvalDrawer={()=>setEvalDrawerOpen(!evalDrawerOpen)}
   evalDrawerOpen={evalDrawerOpen}
   onControlSim={control}
+  onCompare={openComparison}
 
  />
 
@@ -224,7 +243,10 @@ function App(){
         reviewedIds={cases.filter(c=>c.run_id===s.run.id&&!['resolved','dismissed'].includes(c.state)).map(c=>c.boundary_asset_id)}
         reduced={reduced}
         inspection={screen==='inspection'}
-        paused={false}
+        paused={comparisonOpen}
+        rotating={rotating}
+        motion={motion}
+        onManualCamera={()=>setRotating(false)}
         onUnavailable={()=>setSceneReady(false)}
         onFlightProgress={setFlightStats}
         onReady={()=>setSceneReady(true)}
@@ -233,8 +255,8 @@ function App(){
      </SceneBoundary>
 
      <div className="scene-tools">
-      <button disabled={busy} aria-label="Focus selected asset" title="Focus selected asset" onClick={()=>scene.current?.focus()}><Focus size={17}/></button>
-      <button disabled={busy} aria-label="Reset camera" title="Reset camera" onClick={()=>scene.current?.reset()}><RotateCcw size={17}/></button>
+      <button disabled={busy} aria-label="Focus selected asset" title="Focus selected asset" onClick={()=>{setRotating(false);scene.current?.focus()}}><Focus size={17}/></button>
+      <button disabled={busy} aria-label="Reset camera" title="Reset camera" onClick={()=>{setRotating(false);scene.current?.reset()}}><RotateCcw size={17}/></button>
       {sceneReady&&<button disabled={busy} aria-label="Search assets" title="Search assets" onClick={()=>setNavigator(true)}><Search size={16}/></button>}
      </div>
 
@@ -244,10 +266,16 @@ function App(){
       <span><i className="amber"/>Alert</span>
       <small className={fps<30&&fps>0?'fps-warn':''}>{fps} FPS</small>
      </div>
+     <div className="presentation-scene-tools" aria-label="Presentation controls">
+      <button disabled={!sceneReady||busy||reduced||screen==='inspection'} aria-pressed={rotating&&!reduced&&screen!=='inspection'} onClick={()=>{if(!rotating)scene.current?.reset();setRotating(!rotating)}} title={reduced?'Rotation is off for reduced motion':'Slowly orbit the network; dragging stops rotation'}><RotateCcw size={15}/>{rotating?'Stop rotation':'Rotate POV'}</button>
+      <button disabled={reduced} aria-pressed={motion&&!reduced} onClick={()=>{if(motion)setRotating(false);setMotion(!motion)}}>{motion&&!reduced?<Pause size={15}/>:<Play size={15}/>}Scene motion {motion&&!reduced?'on':'off'}</button>
+      <button disabled={!sceneReady||(!tourActive&&(busy||screen==='inspection'))} onClick={()=>tourActive?scene.current?.cancelTour():previewDrone()}><Navigation size={15}/>{tourActive?'End drone tour':'Drone tour'}</button>
+     </div>
+     {tourActive&&<div className="drone-tour-status" role="status"><strong>DRONE TOUR / {Math.round((flightStats?.progress||0)*100)}%</strong><span>Presentation preview · no evidence captured</span><progress max={1} value={flightStats?.progress||0}/></div>}
     </div>
 
     <PiPDroneHUD
-     active={flying.current}
+     active={flying.current&&!tourActive}
      completed={droneCompleted}
      flightStats={flightStats}
      evidence={detail?.evidence.at(-1)}
@@ -274,6 +302,7 @@ function App(){
   open={evalDrawerOpen}
   onToggle={()=>setEvalDrawerOpen(!evalDrawerOpen)}
  />
+ {comparisonOpen&&<ComparisonPanel reduced={reduced} onClose={()=>setComparisonOpen(false)}/>}
 
  {groundOpen&&detail&&<div className="modal-backdrop"><section className="modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="ground-title"><div className="drawer-heading"><h2 id="ground-title">Ground observation</h2><button aria-label="Close ground observation" onClick={()=>setGroundOpen(false)}><X size={18}/></button></div><label>Access<select value={groundAccess} onChange={e=>setGroundAccess(e.target.value)}><option value="obtained">Obtained</option><option value="refused">Refused</option><option value="unsafe">Unsafe</option><option value="not_attempted">Not attempted</option></select></label><label>Visibility<select value={groundVisibility} onChange={e=>setGroundVisibility(e.target.value)}><option value="obstructed">Obstructed</option><option value="partial">Partial</option><option value="clear">Clear</option><option value="not_visible">Not visible</option></select></label><label className="check-row"><input type="checkbox" checked={groundResolved} onChange={e=>setGroundResolved(e.target.checked)}/>Question resolved from ground</label>{!groundResolved&&<label>Unanswered question<textarea rows={3} placeholder="Which overhead connection needs a closer view?" value={groundQuestion} onChange={e=>setGroundQuestion(e.target.value)}/></label>}<button className="primary full" disabled={busy||!groundResolved&&!groundQuestion.trim()} onClick={recordGround}>Save observation</button></section></div>}
  {navigator&&s&&<div className="navigator" role="dialog" aria-label="Asset navigator"><div className="drawer-heading"><h2>Asset navigator</h2><button aria-label="Close asset navigator" onClick={()=>setNavigator(false)}><X size={18}/></button></div><p className="micro">Keyboard and text alternative to 3D picking. Parent → section → meters.</p><input autoFocus aria-label="Filter asset list" placeholder="Filter by ID or label…" value={search} onChange={e=>setSearch(e.target.value)}/><div className="navigator-list">{s.assets.filter(a=>a.meter_id&&(`${a.id} ${a.label}`.toLowerCase().includes(search.toLowerCase()))).map(a=><button key={a.id} className={selected===a.id?'selected':''} onClick={()=>select(a.id)} style={{paddingLeft:12+(['feeder','transformer','branch','household'].indexOf(a.kind))*10}}><Icon kind={a.kind}/><span>{a.label}<small>{a.id} · {s.readings[a.id]?.quality}</small></span><ChevronRight size={13}/></button>)}</div></div>}

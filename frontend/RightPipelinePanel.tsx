@@ -1,219 +1,35 @@
-import {useState} from 'react';
-import {Activity,Sparkles,CheckCircle2,ShieldCheck,AlertTriangle,Navigation,FileText,Download,XCircle} from 'lucide-react';
-import type {Snapshot,Case} from './types';
-import {pretty} from './api';
-
-type Props={
- snapshot:Snapshot;
- selected:string;
- actor:string;
- droneFlying:boolean;
- droneCompleted:boolean;
- onLaunchDrone:()=>void;
- onApproveAction:()=>void;
- onDismissAction:()=>void;
- onExportReport:(format:'json'|'md')=>void;
-};
-
-export default function RightPipelinePanel({
- snapshot,
- selected,
- actor,
- droneFlying,
- droneCompleted,
- onLaunchDrone,
- onApproveAction,
- onDismissAction,
- onExportReport
-}:Props){
- const [groundPreset,setGroundPreset]=useState('obscured');
- const [approvedStep,setApprovedStep]=useState(false);
-
- const targetBranch=snapshot.assets.find(a=>a.id===selected)?.kind==='household'
-  ? snapshot.assets.find(a=>a.id===selected)!.parent_id!
-  : selected;
-
- const isBranch3=targetBranch==='branch-03'||targetBranch.includes('03');
-
- return (
-  <aside className="zone-d-right">
-   <div className="zone-header">
-    <Activity size={15} color="#3b82f6"/>
-    <div>
-     <h3>Live Agent Pipeline & Review</h3>
-     <small>Zone D · Multi-worker fusion & human gate</small>
-    </div>
-   </div>
-
-   {/* Card 1: Live Multi-Worker Execution Trace */}
-   <div className="cockpit-card worker-trace-card">
-    <div className="card-badge-header">
-     <span>1. Multi-Worker Execution Trace</span>
-     <span className="badge blue">WATSONX & RULES</span>
-    </div>
-    <div className="worker-stepper">
-     <div className="worker-row done">
-      <div className="w-meta">
-       <span className="w-pill">W1</span>
-       <strong>Metering & Accounting Worker</strong>
-       <span className="w-ms">18 ms</span>
-      </div>
-      <p className="w-desc">Disjoint cut verified · 6/6 child streams valid · Consecutive streak: 3/3 intervals &gt; 3σ threshold.</p>
-     </div>
-
-     <div className="worker-row done">
-      <div className="w-meta">
-       <span className="w-pill">W2</span>
-       <strong>Electrical Physics Worker</strong>
-       <span className="w-ms">12 ms</span>
-      </div>
-      <p className="w-desc">Line impedance uncalibrated; conservative 3.2% technical loss bound applied. Residual exceeds bound.</p>
-     </div>
-
-     <div className="worker-row done">
-      <div className="w-meta">
-       <span className="w-pill">W3</span>
-       <strong>Commercial & Baseline Worker</strong>
-       <span className="w-ms">15 ms</span>
-      </div>
-      <p className="w-desc">Downstream meters H-07..H-09 show stable baseline profiles; no consumer billing mismatch data available.</p>
-     </div>
-
-     <div className="worker-row done">
-      <div className="w-meta">
-       <span className="w-pill">W4</span>
-       <strong>Spatial Localization & Vision Worker</strong>
-       <span className="w-ms">{droneCompleted?'2.1 s (CV)':'42 ms'}</span>
-      </div>
-      <p className="w-desc">
-       {droneCompleted
-        ? 'Smallest boundary localized to Branch-03. Aerial RGB confirms unmetered physical tap at Pole B-03 (OpenCV 0.94).'
-        : 'Smallest boundary localized to Branch-03. Ground line-of-sight obstructed; aerial viewpoint recommended.'}
-      </p>
-     </div>
-
-     <div className="worker-row granite-row done">
-      <div className="w-meta">
-       <span className="w-pill purple">Granite</span>
-       <strong>ibm/granite-4-h-small</strong>
-       <span className="badge green"><ShieldCheck size={10}/> Policy Passed</span>
-      </div>
-      <p className="w-desc">
-       Proposal: <code>{droneCompleted?'REQUEST_ELECTRICAL_RECHECK':'PROPOSE_VIRTUAL_DRONE'}</code>. Action validated against 9-enum whitelist. Zero simulator truth-leak verified.
-      </p>
-     </div>
-    </div>
-   </div>
-
-   {/* Card 2: Competing Hypotheses & Evidence Ledger */}
-   <div className="cockpit-card hypotheses-card">
-    <div className="card-badge-header">
-     <span>2. Competing Hypotheses Ledger</span>
-     <span className="badge">EVIDENCE FUSION</span>
-    </div>
-    <div className="hypothesis-list">
-     <div className="hypo-item">
-      <div className="hypo-header">
-       <span>Unaccounted / Bypass Load</span>
-       <strong className="status-supported">{droneCompleted?'Supported (94%)':'Supported (68%)'}</strong>
-      </div>
-      <div className="hypo-bar-track">
-       <div className="hypo-bar-fill supported" style={{width:droneCompleted?'94%':'68%'}}/>
-      </div>
-      <small className="hypo-reason">E_in &gt; E_out + L_expected; {droneCompleted?'Aerial OpenCV candidate detected':'Aerial inspection pending'}</small>
-     </div>
-
-     <div className="hypo-item">
-      <div className="hypo-header">
-       <span>Meter Under-Registration</span>
-       <strong className="status-plausible">Plausible (22%)</strong>
-      </div>
-      <div className="hypo-bar-track">
-       <div className="hypo-bar-fill plausible" style={{width:'22%'}}/>
-      </div>
-      <small className="hypo-reason">Requires on-site reference meter injection test to verify calibration</small>
-     </div>
-
-     <div className="hypo-item">
-      <div className="hypo-header">
-       <span>Data / Telemetry Failure</span>
-       <strong className="status-contradicted">Contradicted (0%)</strong>
-      </div>
-      <div className="hypo-bar-track">
-       <div className="hypo-bar-fill contradicted" style={{width:'0%'}}/>
-      </div>
-      <small className="hypo-reason">All 3 downstream AMR meters reporting valid telemetry timestamps</small>
-     </div>
-    </div>
-
-    <div className="missing-evidence-box">
-     <AlertTriangle size={12} color="#f59e0b"/>
-     <div>
-      <strong>Missing Evidence Explicitly Declared:</strong>
-      <p>Physical energization verification and authorized service drop records cannot be proven by sensors alone.</p>
-     </div>
-    </div>
-   </div>
-
-   {/* Card 3: Allowed Next Action & Human Review Gate */}
-   <div className="cockpit-card human-gate-card">
-    <div className="card-badge-header">
-     <span>3. Human Review & Disposition Gate</span>
-     <span className="badge blue">ACTOR: {actor.toUpperCase()}</span>
-    </div>
-
-    <div className="case-id-bar">
-     <FileText size={13}/>
-     <div className="case-id-text">
-      <strong>CASE-2022-0914-{targetBranch.toUpperCase().replace('BRANCH-','BR')}</strong>
-      <small>Distribution vigilance review · Frozen interval 8</small>
-     </div>
-     <span className={'badge '+(approvedStep?'green':'amber')}>
-      {approvedStep?'APPROVED_FOR_CHECK':'AWAITING_REVIEW'}
-     </span>
-    </div>
-
-    <div className="next-action-recommendation">
-     <small>Recommended Next Action (9-Enum Whitelist):</small>
-     <div className="action-pill">
-      <Sparkles size={14} color="#3b82f6"/>
-      <strong>{droneFlying?'DRONE_IN_FLIGHT':droneCompleted?'REQUEST_ELECTRICAL_RECHECK':'PROPOSE_VIRTUAL_DRONE'}</strong>
-     </div>
-    </div>
-
-    <div className="ground-log-input">
-     <label>Ground-First Lead Note (FR-07):</label>
-     <select value={groundPreset} onChange={e=>setGroundPreset(e.target.value)}>
-      <option value="obscured">Ground lead notes: Overhead mid-span obscured by compound roof at Pole B-03.</option>
-      <option value="clear">Ground lead notes: Clear line of sight; service drops appear intact.</option>
-      <option value="refused">Ground lead notes: Substation compound gate locked; inspection delayed.</option>
-     </select>
-    </div>
-
-    <div className="disposition-button-group">
-     <button className="primary full launch-btn" disabled={droneFlying} onClick={onLaunchDrone}>
-      <Navigation size={14}/>
-      <span>{droneFlying?'GT-01 Flying along Conductor…':droneCompleted?'Re-inspect Flagged Pole with Drone':'Approve Virtual Drone Inspection'}</span>
-     </button>
-     {droneCompleted&&(
-      <button className="primary full approve-btn" style={{marginTop:'8px'}} onClick={()=>{setApprovedStep(true);onApproveAction();}}>
-       <CheckCircle2 size={14}/>
-       <span>Approve Lineman Electrical Recheck</span>
-      </button>
-     )}
-
-     <div className="dual-action-row">
-      <button className="secondary" onClick={onDismissAction}>
-       <XCircle size={13}/>
-       <span>Override / Dismiss</span>
-      </button>
-      <button className="secondary" onClick={()=>onExportReport('json')}>
-       <Download size={13}/>
-       <span>Export Case (JSON/MD)</span>
-      </button>
-     </div>
-    </div>
-   </div>
-  </aside>
- );
+import {ArrowRight,FileText} from 'lucide-react';
+import type {Snapshot,Case,Detail,Mission} from './types';
+import {pretty,n} from './api';
+type Props={snapshot:Snapshot;selected:string;actor:string;busy:boolean;detail:Detail|null;cases:Case[];note:string;onNote:(s:string)=>void;onInvestigate:()=>void;onOpenCase:()=>void;onResumeCase:(c:Case)=>void;onTransition:(state:string)=>void;onGround:()=>void;onLaunchDrone:()=>void;onExportReport:(format:'json'|'md')=>void;onCloseCase:()=>void;canFly:boolean;sceneReady:boolean;onSaveNote:()=>void;onSetActor:(actor:string)=>void;onResumeMission:(mission:Mission)=>void;disposition:string;dispositions:string[];onDisposition:(value:string)=>void};
+export default function RightPipelinePanel(p:Props){
+ const asset=p.snapshot.assets.find(a=>a.id===p.selected)!;
+ const area=asset.kind==='household'?asset.parent_id!:p.selected;
+ const balance=p.snapshot.balances.find(b=>b.boundary_asset_id===area);
+ const alert=p.snapshot.alerts.find(a=>a.boundary_asset_id===area&&a.status==='active');
+ const c=p.detail?.case,reviewer=['reviewer','supervisor'].includes(p.actor),analyst=['analyst','supervisor'].includes(p.actor);
+ const interrupted=p.detail?.missions.find(m=>!['completed','cancelled'].includes(m.status));
+ const status=balance?.validity!=='valid'?'Data incomplete':alert?'Persistent excess':balance.qualifies?'Awaiting persistence':'Within model range';
+ return <aside className="zone-d-right" aria-label="Investigation and review">
+  <div className="zone-header"><h2>{c?'Case review':'Investigation'}</h2><span className={'badge '+(alert?'amber':'')}>{c?pretty(c.state):alert?'Alert':'Monitoring'}</span></div>
+  <section className="review-summary"><small>{asset.label}</small><h3>{status}</h3><p>{balance?.validity!=='valid'?'Restore readings before investigating loss.':alert?'Review the evidence and choose the next check.':balance?.qualifies?'Three consecutive intervals are required.':'No persistent alert in this section.'}</p>
+   {!c&&<><button className="primary full" disabled={p.busy||!analyst} onClick={p.onInvestigate}>Analyze section<ArrowRight size={15}/></button>{alert&&<button className="secondary full" disabled={p.busy||!analyst} onClick={p.onOpenCase}>Open case</button>}{!analyst&&<button className="text-button" disabled={p.busy} onClick={()=>p.onSetActor('analyst')}>Switch to analyst</button>}</>}
+  </section>
+  {c&&p.detail&&<section className="case-controls"><div className="section-title"><h3>Human review</h3><button className="text-button" disabled={p.busy} onClick={p.onCloseCase}>Close</button></div><small className="case-reference">{c.id} / Interval {c.analysis_sequence+1}</small>
+   {['open','reopened'].includes(c.state)&&<button className="primary full" disabled={p.busy||!analyst} onClick={()=>p.onTransition('triaged')}>Triage case</button>}
+   {c.state!=='open'&&!reviewer&&!['resolved','dismissed'].includes(c.state)&&<button className="secondary full" disabled={p.busy} onClick={()=>p.onSetActor('reviewer')}>Switch to reviewer</button>}
+   {c.state==='triaged'&&<button className="primary full" disabled={p.busy||!reviewer} onClick={()=>p.onTransition('ground_review')}>Begin ground review</button>}
+   {['ground_review','inspection_requested','evidence_ready','under_review','field_check_required'].includes(c.state)&&<><button className="secondary full" disabled={p.busy||!reviewer} onClick={p.onGround}>Record ground observation</button>{p.canFly&&!interrupted&&<button className="primary full" disabled={p.busy||!reviewer||!p.sceneReady} onClick={p.onLaunchDrone}>{p.sceneReady?'Approve drone inspection':'Loading scene...'}</button>}</>}
+   {interrupted&&<button className="primary full" disabled={p.busy||!reviewer||!p.sceneReady} onClick={()=>p.onResumeMission(interrupted)}>Retry interrupted inspection</button>}
+   {p.detail.transitions.includes('under_review')&&<button className="secondary full" disabled={p.busy||!reviewer} onClick={()=>p.onTransition('under_review')}>Begin review</button>}
+   {['resolved','dismissed'].includes(c.state)&&<button className="secondary full" disabled={p.busy||p.actor!=='supervisor'} onClick={()=>p.onTransition('reopened')}>Reopen case</button>}
+   <label>Review note<textarea rows={3} placeholder="Record an observation or decision..." value={p.note} disabled={p.busy} onChange={e=>p.onNote(e.target.value)}/></label><button className="secondary full" disabled={p.busy||!p.note.trim()||p.actor==='presenter'} onClick={p.onSaveNote}>Save note</button>
+   {c.state==='under_review'&&<><button className="primary full" disabled={p.busy||!reviewer} onClick={()=>p.onTransition('field_check_required')}>Request field check</button><details><summary>Close case</summary><label>Disposition<select value={p.disposition} disabled={p.busy||p.actor!=='supervisor'} onChange={e=>p.onDisposition(e.target.value)}>{p.dispositions.map(d=><option key={d} value={d}>{d}</option>)}</select></label><button className="secondary full" disabled={p.busy||p.actor!=='supervisor'||!p.note.trim()} onClick={()=>p.onTransition('resolved')}>Resolve with reason</button><button className="secondary full" disabled={p.busy||p.actor!=='supervisor'||!p.note.trim()} onClick={()=>p.onTransition('dismissed')}>Dismiss with reason</button></details>{p.actor!=='supervisor'&&<button className="text-button" disabled={p.busy} onClick={()=>p.onSetActor('supervisor')}>Switch to supervisor</button>}</>}
+   <div className="dual-action-row"><button disabled={p.busy} onClick={()=>p.onExportReport('json')}>Export JSON</button><button disabled={p.busy} onClick={()=>p.onExportReport('md')}>Markdown</button></div>
+   {!!p.detail.evidence.length&&<details><summary>Captures / {p.detail.evidence.length}</summary>{p.detail.evidence.map(e=><a className="capture-link" key={e.id} href={e.annotated_image_path||e.original_image_path} target="_blank" rel="noreferrer"><img src={e.annotated_image_path||e.original_image_path} alt={'Inspection: '+pretty(e.observation_status)}/><small>{pretty(e.observation_status)} / {n(e.processing_ms,0)} ms</small></a>)}</details>}
+   <details><summary>Activity / {p.detail.audit.length}</summary>{p.detail.audit.map(a=><p className="micro" key={a.id}>{pretty(a.action)} / {a.actor_id}</p>)}</details>
+  </section>}
+  {!c&&<section className="recent-cases"><h3>Saved cases <small>{p.cases.length}</small></h3>{p.cases.length?p.cases.slice(0,5).map(c=><button key={c.id} disabled={p.busy} onClick={()=>p.onResumeCase(c)}><FileText size={15}/><span>{pretty(c.boundary_asset_id)}<small>{pretty(c.state)} / Interval {c.analysis_sequence+1}</small></span><ArrowRight size={13}/></button>):<p className="micro">Cases appear after reviewing an alert.</p>}</section>}
+  <p className="review-disclosure">Synthetic observations. Human verification required.</p>
+ </aside>;
 }

@@ -335,8 +335,22 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
   }
  }),[asset,gl,scene,camera,reduced,onFlightProgress]);
  return <>
-  <color attach="background" args={['#06090e']}/><fog attach="fog" args={['#06090e',130,300]}/>
-  <ambientLight intensity={1.1}/><directionalLight position={[10,55,40]} intensity={2.2} color="#cbd5e1"/><directionalLight position={[-20,25,-30]} intensity={1.1} color="#2563eb"/>
+  <color attach="background" args={['#060a10']}/><fog attach="fog" args={['#06090e',100,260]}/>
+  {/* Key: cool-white overhead sun */}
+  <ambientLight intensity={0.75} color="#b8c8e0"/>
+  <directionalLight position={[15,60,45]} intensity={2.8} color="#dde8f5"/>
+  {/* Fill: deep blue from opposite corner */}
+  <directionalLight position={[-25,18,-35]} intensity={1.4} color="#2a5bbf"/>
+  {/* Warm accent: faint orange bounce from ground level */}
+  <directionalLight position={[0,-8,30]} intensity={0.35} color="#f59e4a"/>
+  {/* Street / pole lamp point lights scattered through scene */}
+  <pointLight position={[-12,8,-8]} intensity={18} distance={28} decay={2} color="#fef3c7"/>
+  <pointLight position={[14,8,10]} intensity={18} distance={28} decay={2} color="#fef3c7"/>
+  <pointLight position={[0,8,20]} intensity={14} distance={24} decay={2} color="#fde68a"/>
+  <pointLight position={[-30,8,-6]} intensity={12} distance={22} decay={2} color="#fef3c7"/>
+  <pointLight position={[28,8,-6]} intensity={12} distance={22} decay={2} color="#fef3c7"/>
+  {/* Blue accent at launch station */}
+  <pointLight position={[0,3,-22]} intensity={22} distance={18} decay={2} color="#3b82f6"/>
   <Scenery/>
   <LaunchStation p={LAUNCH_STATION_POS}/>
   {!flightActive&&!mission&&!routeComplete&&<group position={[0,.45,-22]}><Drone active={false} reduced={reduced}/><Html position={[0,2.6,0]} center zIndexRange={[5,0]}><div className="drone-caption"><span style={{background:blue}}/>GT–01 <small>DOCKED · STANDBY</small></div></Html></group>}
@@ -352,11 +366,11 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
     return <Line key={c.id} points={c.geometry_points_m} color={problem?amber:active?royalBlue:slate} lineWidth={problem||active?2.5:1} transparent opacity={(problem || active) ? .95 : .35}/>
    })}
    <mesh position={[asset.position_m[0],.1,asset.position_m[2]]} rotation={[-Math.PI/2,0,0]}><ringGeometry args={[3,3.3,40]}/><meshBasicMaterial color={selectedColor} transparent opacity={.8}/></mesh>
-   {!inspection&&!routeComplete&&<Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center distanceFactor={110} zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{status?.validity==='data_incomplete'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>}
+   {!inspection&&!routeComplete&&<Html position={[asset.position_m[0],asset.kind==='household'?7:11,asset.position_m[2]]} center distanceFactor={110} zIndexRange={[5,0]}><button className="scene-label" style={{borderColor:selectedColor}} onClick={()=>onSelect(asset.id)}><span style={{color:selectedColor}}>◇</span> <strong>{asset.label}</strong><small>{!!status&&status.validity!=='valid'?'⚠ Data incomplete':reviewedIds.includes(targetBranch)?'◉ Under review':anomalous.includes(targetBranch)?'△ Unexplained loss':'✓ Within threshold'}</small></button></Html>}
    {!inspection&&snapshot.assets.filter(a=>a.kind==='feeder'&&a.id!==selected).map(a=><Html position={[a.position_m[0],12,a.position_m[2]]} key={a.id} center distanceFactor={140} zIndexRange={[5,0]}><button className="scene-label feeder" onClick={()=>onSelect(a.id)}>{a.label}</button></Html>)}
-   {(mission||routeComplete)&&<><Line points={flight.current?.route||mission?.waypoints_m||[]} color={royalBlue} lineWidth={2} dashed dashSize={1} gapSize={.7}/>{(mission?.waypoints_m||[]).map((p,i)=><group key={i} position={p}><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[1.6,1.8,32]}/><meshBasicMaterial color={blue} transparent opacity={.75} side={THREE.DoubleSide}/></mesh></group>)}<group ref={drone} position={dronePos.current}><Drone active={flightActive||routeComplete} reduced={reduced}/><Html position={[0,4,0]} center zIndexRange={[6,0]}><div className="drone-caption"><span style={{background:routeComplete?'#f59e0b':blue}}/>GT–01 <small>{flightActive?'IN FLIGHT':routeComplete?'INSPECTING POLE P-03':'STANDBY'}</small></div></Html><mesh rotation={[Math.PI,0,0]} position={[0,-4,0]}><coneGeometry args={[3.2,7.5,24,1,true]}/><meshBasicMaterial color={routeComplete?amber:royalBlue} wireframe transparent opacity={flightActive?.22:routeComplete?.38:.08}/></mesh>{(flightActive||routeComplete)&&<mesh rotation={[-Math.PI/2,0,0]} position={[0,-2.5,0]}><ringGeometry args={[1.6,1.85,24]}/><meshBasicMaterial color={routeComplete?amber:blue} transparent opacity={.85} side={THREE.DoubleSide}/></mesh>}</group></>}
+   {(mission||routeComplete)&&<><Line points={flight.current?.route||mission?.waypoints_m||[]} color={royalBlue} lineWidth={2} dashed dashSize={1} gapSize={.7}/>{(mission?.waypoints_m||[]).map((p,i)=><group key={i} position={p}><mesh rotation={[-Math.PI/2,0,0]}><ringGeometry args={[1.6,1.8,32]}/><meshBasicMaterial color={blue} transparent opacity={.75} side={THREE.DoubleSide}/></mesh></group>)}<group ref={drone} position={dronePos.current}><Drone active={flightActive||routeComplete} reduced={reduced}/><Html position={[0,4,0]} center zIndexRange={[6,0]}><div className="drone-caption"><span style={{background:routeComplete?'#f59e0b':blue}}/>GT–01 <small>{flightActive?'IN FLIGHT':routeComplete?'AT VIEWPOINT':'STANDBY'}</small></div></Html><mesh rotation={[Math.PI,0,0]} position={[0,-4,0]}><coneGeometry args={[3.2,7.5,24,1,true]}/><meshBasicMaterial color={routeComplete?amber:royalBlue} wireframe transparent opacity={flightActive?.22:routeComplete?.38:.08}/></mesh>{(flightActive||routeComplete)&&<mesh rotation={[-Math.PI/2,0,0]} position={[0,-2.5,0]}><ringGeometry args={[1.6,1.85,24]}/><meshBasicMaterial color={routeComplete?amber:blue} transparent opacity={.85} side={THREE.DoubleSide}/></mesh>}</group></>}
    {(()=>{
-     const flg=snapshot.assets.find(a=>a.id===(anomalous[0]||'branch-03'));
+     const flg=snapshot.assets.find(a=>a.id===mission?.target_asset_ids[0]);
      if(!flg)return null;
      const [fx,,fz]=flg.position_m;
      if(routeComplete){
@@ -365,8 +379,8 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
        <mesh rotation={[-Math.PI/2,0,0]} position={[0,.2,0]}><ringGeometry args={[1.2,1.5,24]}/><meshBasicMaterial color="#d97706" transparent opacity={.7} side={THREE.DoubleSide}/></mesh>
        <Html position={[0,15.2,0]} center distanceFactor={26} zIndexRange={[7,0]}>
         <div className="pole-inspection-flag">
-         <strong><span className="live-dot" style={{background:'#f59e0b'}}/>FLAGGED BY DRONE GT-01</strong>
-         <small>UNMETERED BYPASS DETECTED · OPENCV 0.94</small>
+         <strong><span className="live-dot" style={{background:'#f59e0b'}}/>Inspection viewpoint</strong>
+         <small>Review saved captures</small>
         </div>
        </Html>
       </group>;
@@ -399,4 +413,4 @@ const World=forwardRef<SceneHandle,Omit<Props,'handle'>>(function World({snapsho
   <OrbitControls ref={controls} makeDefault enabled={!flightActive} maxPolarAngle={Math.PI*.47} minDistance={10} maxDistance={240} enableDamping dampingFactor={.12}/>
  </>
 });
-export default function Scene({handle,onReady,paused,...props}:Props){return <Canvas frameloop={paused?'never':'always'} onCreated={()=>onReady?.()} camera={{position:[100,95,120],fov:43,near:.1,far:500}} dpr={[1,1.5]} gl={{antialias:true,powerPreference:'high-performance'}}><World ref={handle} {...props} onReady={onReady}/></Canvas>}
+export default function Scene({handle,onReady,paused,...props}:Props){return <Canvas frameloop={paused?'never':'always'} onCreated={()=>onReady?.()} camera={{position:[100,95,120],fov:40,near:.1,far:500}} dpr={[1,2]} gl={{antialias:true,powerPreference:'high-performance',alpha:false,stencil:false}}><World ref={handle} {...props} onReady={onReady}/></Canvas>}

@@ -8,12 +8,12 @@ COPY frontend/ ./frontend/
 COPY public/ ./public/
 RUN npm run build
 
-FROM python:3.14-slim-bookworm AS dependencies
+FROM python:3.11-slim-bookworm AS dependencies
 WORKDIR /build
 COPY requirements.lock.txt ./
 RUN pip install --no-cache-dir --prefix=/install -r requirements.lock.txt
 
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GRIDTRACE_DATA=/var/lib/gridtrace \
@@ -35,6 +35,7 @@ COPY --from=frontend /build/dist/ ./dist/
 USER gridtrace
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).read()"]
+    CMD ["sh", "-c", "python -c \"import os, urllib.request; p = os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/api/health', timeout=4).read()\""]
 # One process owns the SQLite connection, clock and in-process investigation jobs.
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-graceful-shutdown", "10"]
+CMD ["sh", "-c", "python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-graceful-shutdown 10"]
+
